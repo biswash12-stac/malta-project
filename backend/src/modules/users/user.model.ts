@@ -8,6 +8,7 @@ export type User = {
   email: string;
   passwordHash: string;
   role: UserRole;
+  tokenVersion: number;
   createdAt: Date;
 };
 
@@ -20,6 +21,8 @@ const userSchema = new Schema<User>(
     // select: false so a hash can only leave the DB when a query asks for it by name.
     passwordHash: { type: String, required: true, select: false },
     role: { type: String, enum: USER_ROLES, default: "customer", required: true },
+    // Stored in each login token. Increasing it cancels every token issued before.
+    tokenVersion: { type: Number, default: 0, required: true },
   },
   { timestamps: { createdAt: true, updatedAt: false } }
 );

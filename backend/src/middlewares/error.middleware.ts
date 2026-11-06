@@ -5,6 +5,12 @@ import { logger } from "../utils/logger.js";
 import { AppError } from "../utils/app-error.js";
 import type { ApiError } from "../utils/api-response.js";
 
+// Errors about the input as a whole, such as an unknown param, have no field to sit under.
+const zodErrorDetails = (err: ZodError) => {
+  const { fieldErrors, formErrors } = err.flatten();
+  return formErrors.length > 0 ? { ...fieldErrors, _form: formErrors } : fieldErrors;
+};
+
 export const notFoundHandler = (req: Request, _res: Response, next: NextFunction) => {
   next(AppError.notFound(`Route ${req.method} ${req.originalUrl} not found`));
 };
@@ -33,7 +39,7 @@ export const errorHandler = (
       error: {
         code: "VALIDATION_ERROR",
         message: "Invalid input",
-        details: err.flatten().fieldErrors,
+        details: zodErrorDetails(err),
       },
     };
     res.status(400).json(body);
@@ -53,7 +59,13 @@ export const errorHandler = (
   if (err instanceof mongoose.Error.ValidationError) {
     res.status(400).json({
       success: false,
-      error: { code: "VALIDATION_ERROR", message: "Invalid input" },
+      error: {
+        code: "VALIDATION_ERROR",
+        message: "Invalid input",
+        details: Object.fromEntries(
+          Object.entries(err.errors).map(([field, { message }]) => [field, [message]])
+        ),
+      },
     });
     return;
   }

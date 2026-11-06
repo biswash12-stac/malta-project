@@ -212,7 +212,10 @@ test("a model validation error returns 400", async () => {
 test("auth routes are rate limited", async () => {
   let last = 0;
   for (let i = 0; i < 25 && last !== 429; i++) {
-    last = (await post("/api/v1/auth/login", {})).status;
+    // A different fake IP each time: without a proxy configured, this must not reset the count.
+    const headers = { "content-type": "application/json", "x-forwarded-for": `10.0.0.${i}` };
+    const res = await fetch(`${base}/api/v1/auth/login`, { method: "POST", headers, body: "{}" });
+    last = res.status;
   }
   assert.equal(last, 429);
   const res = await post("/api/v1/auth/login", {});

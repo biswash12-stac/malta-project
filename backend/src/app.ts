@@ -8,12 +8,13 @@ import { env } from "./config/env.js";
 import { logger } from "./utils/logger.js";
 import { router } from "./routes.js";
 import { errorHandler, notFoundHandler } from "./middlewares/error.middleware.js";
+import { generalRateLimit } from "./middlewares/rate-limit.middleware.js";
 
 export const app = express();
 
-// Behind a reverse proxy (Render, Railway, nginx) — required for correct client IPs,
+// Number of reverse proxies in front of the API (Render, Railway, nginx) — required for correct client IPs,
 // which matters for rate limiting and logs.
-app.set("trust proxy", 1);
+app.set("trust proxy", env.TRUST_PROXY_HOPS);
 
 // Security headers. CSP is not configured yet — tune in Phase 8.
 app.use(helmet());
@@ -42,9 +43,12 @@ app.use(
   })
 );
 
+// After CORS, so a blocked browser still gets a readable 429. Before body parsing, to save the work.
+app.use(generalRateLimit);
+
 // Body parsing. Limit is small on purpose — our API never accepts large bodies.
+// JSON only: browsers can post HTML forms from any site, but not JSON without passing CORS.
 app.use(express.json({ limit: "10kb" }));
-app.use(express.urlencoded({ extended: true, limit: "10kb" }));
 
 // Cookies (used for JWT auth cookie, later).
 app.use(cookieParser());

@@ -30,6 +30,7 @@ backend/
 │   │   │   ├── product.routes.ts
 │   │   │   ├── product.controller.ts
 │   │   │   ├── product.service.ts
+│   │   │   ├── product.pricing.ts      # 30-day price history and offer rules
 │   │   │   └── product.schema.ts
 │   │   ├── orders/
 │   │   │   ├── order.model.ts
@@ -61,6 +62,8 @@ backend/
 │   │   ├── app-error.ts
 │   │   ├── api-response.ts
 │   │   ├── logger.ts
+│   │   ├── common.schema.ts            # shared pagination and id schemas
+│   │   ├── pagination.ts               # skip value and list response shape
 │   │   ├── slugify.ts
 │   │   └── money.ts
 │   ├── types/
@@ -86,7 +89,8 @@ backend/
 
 ## Express 5 Notes
 - Async handlers need no wrapper: Express 5 passes rejected promises to the error middleware.
-- `req.query` is read-only, so validated queries can't be assigned back to it. Decide how to pass them to handlers when query validation is added in Phase 3.
+- `req.query` has no setter, so `validateRequest` replaces it with `Object.defineProperty`. Handlers read the parsed values from `req.query` as usual.
+- The default query parser reads `?page[$gt]=1` as a literal key, not a nested object. Query schemas use `z.strictObject` so these params return a 400.
 
 ## Packages
 - Runtime: express, mongoose, zod, envalid, jsonwebtoken, bcryptjs, cookie-parser, cors, helmet, express-rate-limit, dotenv, pino, pino-http. Add multer and cloudinary in Phase 3.

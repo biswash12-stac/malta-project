@@ -22,11 +22,16 @@ const jwtSecret = makeValidator<string>((input) => {
   throw new Error("JWT_SECRET must be at least 32 characters");
 });
 
+const proxyHops = makeValidator<number>((input) => {
+  const hops = Number(input);
+  if (Number.isInteger(hops) && hops >= 0) return hops;
+  throw new Error("TRUST_PROXY_HOPS must be a whole number, 0 or more");
+});
+
 export const env = cleanEnv(process.env, {
-  // node env: development | test | production
+  // No default: if this were forgotten on a server, it would run with production protections off.
   NODE_ENV: str({
     choices: ["development", "test", "production"],
-    default: "development",
   }),
 
   // if port is not provided, assume 4000
@@ -38,6 +43,12 @@ export const env = cleanEnv(process.env, {
   MONGODB_URI: mongoUri(),
 
   JWT_SECRET: jwtSecret(),
+
+  // How many proxies sit in front of the API. Too high lets clients fake their IP and dodge
+  // rate limits; too low puts all users under one limit. Required in production.
+  TRUST_PROXY_HOPS: proxyHops({
+    devDefault: 0,
+  }),
 
   // devDefault: required in production, so a missing value stops startup instead of breaking CORS
   CLIENT_URL: url({
