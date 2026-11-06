@@ -1,40 +1,49 @@
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
-import { env } from "../../config/env.js";
 import { AppError } from "../../utils/app-error.js";
-import { createUser, findUserByEmailWithPassword, toPublicUser } from "../users/user.service.js";
+import type { UserDocument } from "../users/user.model.js";
+import {
+  createUser,
+  findUserByEmailWithPassword,
+  toPublicUser,
+  type PublicUser,
+} from "../users/user.service.js";
 import type { LoginInput, RegisterInput } from "./auth.schema.js";
+import { loginWithGoogle } from "./google.service.js";
+import {
+  createSession,
+  findSessionOwner,
+  revokeAllSessions,
+  signPendingLoginToken,
+  verifyToken,
+  type SessionTokens,
+} from "./session.service.js";
+import { sendCode, validateLogin } from "./two-factor.service.js";
 
 export const BCRYPT_COST = 12;
-export const SESSION_SECONDS = 7 * 24 * 60 * 60;
 
-// Compared against when the email is unknown, so both login failures take the same time
-// and response timing can't reveal which emails have accounts.
+// Compared against when the email is unknown or has no password, so every login failure
+// takes the same time and response timing can't reveal which emails have accounts.
 const DUMMY_HASH = bcrypt.hashSync("no-such-user", BCRYPT_COST);
 
-export const signToken = (userId: string): string =>
-  jwt.sign({}, env.JWT_SECRET, {
-    algorithm: "HS256",
-    subject: userId,
-    expiresIn: SESSION_SECONDS,
-  });
+export type LoginResult =
+  { requires2FA: true; pendingToken: string } | ({ user: PublicUser } & SessionTokens);
 
-// Returns the user id. Throws 401 on a bad, expired or tampered token.
-export const verifyToken = (token: string): string => {
-  try {
-    const { sub } = jwt.verify(token, env.JWT_SECRET, { algorithms: ["HS256"] });
-    if (typeof sub !== "string") throw new Error("Token has no subject");
-    return sub;
-  } catch {
-    throw AppError.unauthorized();
-  }
+const startSession = async (user: UserDocument): Promise<LoginResult> => ({
+  user: toPublicUser(user),
+  ...(await createSession(user)),
+});
+
+// The one place a password or Google login turns into a session, so neither can skip 2FA.
+const completeLogin = async (user: UserDocument): Promise<LoginResult> => {
+  if (!user.twoFactorEnabled) return startSession(user);
+  await sendCode(user);
+  return { requires2FA: true, pendingToken: signPendingLoginToken(user) };
 };
 
-export const register = async ({ password, ...profile }: RegisterInput) => {
+export const register = async ({ password, ...profile }: RegisterInput): Promise<LoginResult> => {
   const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
   try {
-    const user = await createUser({ ...profile, passwordHash });
-    return toPublicUser(user);
+    return await startSession(await createUser({ ...profile, passwordHash }));
   } catch (err) {
     // Rely on the unique index, not a prior lookup: two parallel signups can't both pass.
     if ((err as { code?: number }).code === 11000) {
@@ -44,9 +53,35 @@ export const register = async ({ password, ...profile }: RegisterInput) => {
   }
 };
 
-export const login = async ({ email, password }: LoginInput) => {
+export const login = async ({ email, password }: LoginInput): Promise<LoginResult> => {
   const user = await findUserByEmailWithPassword(email);
   const matches = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
-  if (!user || !matches) throw AppError.unauthorized("Invalid email or password");
-  return toPublicUser(user);
+  if (!user?.passwordHash || !matches) throw AppError.unauthorized("Invalid email or password");
+  return completeLogin(user);
+};
+
+export const googleLogin = async (credential: string): Promise<LoginResult> =>
+  completeLogin(await loginWithGoogle(credential));
+
+export const finishTwoFactorLogin = async (
+  pendingToken: unknown,
+  code: string
+): Promise<LoginResult> => startSession(await validateLogin(pendingToken, code));
+
+// Ends every session of the user behind these cookies. Bad or expired cookies have nothing to end.
+export const logout = async (accessToken: unknown, refreshToken: unknown): Promise<void> => {
+  if (typeof refreshToken === "string") {
+    const owner = await findSessionOwner(refreshToken);
+    if (owner) {
+      await revokeAllSessions(owner.userId, owner.tokenVersion);
+      return;
+    }
+  }
+  if (typeof accessToken !== "string") return;
+  try {
+    const { userId, tokenVersion } = verifyToken(accessToken, "access");
+    await revokeAllSessions(userId, tokenVersion);
+  } catch (err) {
+    if (!(err instanceof AppError)) throw err;
+  }
 };

@@ -33,10 +33,11 @@ Nepali grocery e-commerce site for a Nepali client in Malta. Customers order and
 - Roles: `customer`, `admin`
 
 ## Current Status
-- Current phase: Phase 2 code complete; register and login checked in Postman; `/me`, logout and the PR still to do.
-- Done: backend foundation, user model, auth routes, JWT cookie, role middleware, admin seed, automated auth tests.
-- In progress: nothing.
-- Next: Phase 3 (catalog API).
+- Current phase: Phase 3 (catalog API).
+- Done: Phase 2 (backend foundation, user model, auth routes, JWT cookie, role middleware, admin seed, automated auth tests).
+- In progress: Phase 3 code is complete: category and product APIs, indexes, `validateRequest` and signed Cloudinary uploads. PRs are pending.
+- Auth upgrade (access and refresh tokens, password reset, email 2FA, Google login) is built on `feature/auth-upgrade`. Real email and Google sign-in still need the developer's accounts and a live test.
+- Next: open the catalog and auth PRs, and work through the remaining whole-repo audit findings (see `backend/PROGRESS.md`). Phase 4 (orders) needs client answers first. Security audit code fixes are done; separating production secrets is a launch task (see `backend/PROGRESS.md`).
 - Blocked: backend ESLint (no TypeScript 7 support yet). Frontend coding needs written design approval (Phase 1), and no approval is recorded yet.
 
 ## Open Questions for Client
@@ -53,6 +54,21 @@ Nepali grocery e-commerce site for a Nepali client in Malta. Customers order and
 | 2026-11-06 | Backend has no ESLint for now | `typescript-eslint` does not support TypeScript 7 |
 | 2026-11-06 | Site and API must share a parent domain | Next.js middleware can't otherwise read the login cookie |
 | 2026-11-06 | Tests use in-memory MongoDB | Tests never touch a real database |
+| 2026-11-06 | Products get nameEn + nameNp, offerPrice and an admin-set shopRating | Backend developer's decision; no customer review system in v1 |
+| 2026-11-06 | Signed direct uploads to Cloudinary, replacing the Multer plan | Secret stays on the server; files never pass through the API; no extra packages |
+| 2026-11-06 | Auth upgrade: access and refresh tokens, password reset, email 2FA, Google login | Backend developer's decision, outside the frozen PRD section 5; tell the client if it's a paid change |
+| 2026-11-06 | 2FA login uses a pending httpOnly cookie, not `userId`; reset token goes in the body, not the URL | Hides internal IDs; request logs record URLs |
+| 2026-11-06 | Google sign-in removes the password and sessions of an unverified customer account | Stops takeover by someone who registered the victim's email first |
+| 2026-11-06 | Added general and per-account rate limits; common passwords rejected; JSON bodies only; `NODE_ENV` required | Security audit fixes |
+| 2026-11-06 | Added `tokenVersion`; logout ends sessions on every device | Stolen tokens can now be cancelled |
+| 2026-11-06 | Admin seed refuses customer emails and passwords under 12 characters | Stops an attacker gaining admin by registering the owner's email first |
+| 2026-11-06 | `TRUST_PROXY_HOPS` is required in production | A wrong fixed value let clients fake their IP and dodge rate limits |
+| 2026-11-06 | `averageRating` renamed `shopRating` | "Average" implies customer reviews, which could mislead under EU consumer rules |
+| 2026-11-06 | Offers store `priorLowestPrice` from a 30-day price history | EU Omnibus Directive: reductions must reference the lowest recent price |
+| 2026-11-06 | Product slugs don't change on rename | Keeps bookmarks and Google links working |
+| 2026-11-06 | Hiding a category hides its products publicly | Customers shouldn't reach products from a hidden category; product records stay unchanged |
+| 2026-11-06 | Category slug follows its name | Keeps names unique through the slug's index |
+| 2026-11-06 | Product images store `{url, publicId}` | Cloudinary needs the id to delete replaced images |
 | 2026-11-06 | Register takes username, email, password; no phone on the account | Simpler signup; phone is still collected per order at checkout (FR-9) |
 
 ## Working Rules Reminder

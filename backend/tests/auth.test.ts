@@ -84,7 +84,7 @@ test("register creates a customer, sets a safe cookie, never returns the hash", 
   assert.equal(JSON.parse(raw).data.user.role, "customer");
 
   const cookie = res.headers.getSetCookie()[0] ?? "";
-  assert.match(cookie, /^auth_token=/);
+  assert.match(cookie, /^access_token=/);
   assert.match(cookie, /HttpOnly/);
   assert.match(cookie, /SameSite=Lax/);
 });
@@ -132,7 +132,7 @@ test("login, me and logout work as one session", async () => {
   assert.equal((await me.json()).data.user.email, customer.email);
 
   const logout = await post("/api/v1/auth/logout", {});
-  assert.match(logout.headers.getSetCookie()[0] ?? "", /^auth_token=;/);
+  assert.match(logout.headers.getSetCookie()[0] ?? "", /^access_token=;/);
 });
 
 test("me rejects a missing or tampered token", async () => {
@@ -186,7 +186,7 @@ test("seed script creates an admin who can log in, and is safe to re-run", async
 
 test("client mistakes return 4xx, not 500", async () => {
   assert.equal((await post("/api/v1/auth/logout", "{bad")).status, 400);
-  const big = await post("/api/v1/auth/logout", { a: "x".repeat(20_000) });
+  const big = await post("/api/v1/auth/logout", { a: "x".repeat(40_000) });
   assert.equal(big.status, 413);
   assert.equal((await big.json()).error.code, "BAD_REQUEST");
 });
@@ -212,7 +212,10 @@ test("a model validation error returns 400", async () => {
 test("auth routes are rate limited", async () => {
   let last = 0;
   for (let i = 0; i < 25 && last !== 429; i++) {
-    last = (await post("/api/v1/auth/login", {})).status;
+    // A different fake IP each time: without a proxy configured, this must not reset the count.
+    const headers = { "content-type": "application/json", "x-forwarded-for": `10.0.0.${i}` };
+    const res = await fetch(`${base}/api/v1/auth/login`, { method: "POST", headers, body: "{}" });
+    last = res.status;
   }
   assert.equal(last, 429);
   const res = await post("/api/v1/auth/login", {});

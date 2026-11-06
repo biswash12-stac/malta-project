@@ -22,7 +22,7 @@
 
 ## 4. Security Rules
 - Hash passwords (bcrypt); never return `passwordHash`.
-- Rate-limit login/register; use helmet; CORS whitelist only.
+- Rate-limit the whole API, with stricter limits on login/register; use helmet; CORS whitelist only. The API reads JSON bodies only.
 - Sanitize inputs.
 - Soft-delete products that appear in orders.
 - Admin is created only by seed script.
