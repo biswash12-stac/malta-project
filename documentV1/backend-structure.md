@@ -7,7 +7,7 @@ backend/
 │   ├── server.ts                   # starts server, connects DB
 │   ├── routes.ts                   # mounts all module routes under /api/v1
 │   ├── config/
-│   │   ├── env.ts                  # validated env variables (zod)
+│   │   ├── env.ts                  # validated env variables (envalid)
 │   │   ├── db.ts                   # mongoose connection
 │   │   └── cloudinary.ts
 │   ├── modules/
@@ -59,17 +59,16 @@ backend/
 │   │   └── error.middleware.ts         # global error handler
 │   ├── utils/
 │   │   ├── app-error.ts
-│   │   ├── async-handler.ts
 │   │   ├── api-response.ts
+│   │   ├── logger.ts
 │   │   ├── slugify.ts
 │   │   └── money.ts
 │   ├── types/
 │   │   └── express.d.ts                # req.user typing
 │   └── scripts/
 │       └── seed-admin.ts
-├── tests/                              # service-level tests (optional v1)
+├── tests/                              # API tests on in-memory MongoDB (npm test)
 ├── .env.example
-├── eslint.config.js
 ├── .prettierrc
 ├── tsconfig.json
 ├── package.json
@@ -85,6 +84,11 @@ backend/
 ## Request Flow Example (place order)
 `POST /api/v1/orders` → `order.routes` (auth + validate) → `order.controller` → `order.service` (check stock, compute totals, create order, decrement stock, call payment provider) → `order.model` → response via `api-response`.
 
-## Suggested Packages
-- Runtime: express, mongoose, zod, jsonwebtoken, bcrypt, cookie-parser, cors, helmet, express-rate-limit, multer, cloudinary, dotenv, pino (or morgan)
-- Dev: typescript, tsx, eslint, prettier, @types/*
+## Express 5 Notes
+- Async handlers need no wrapper: Express 5 passes rejected promises to the error middleware.
+- `req.query` is read-only, so validated queries can't be assigned back to it. Decide how to pass them to handlers when query validation is added in Phase 3.
+
+## Packages
+- Runtime: express, mongoose, zod, envalid, jsonwebtoken, bcryptjs, cookie-parser, cors, helmet, express-rate-limit, dotenv, pino, pino-http. Add multer and cloudinary in Phase 3.
+- Dev: typescript, tsx, prettier, mongodb-memory-server, @types/*
+- ESLint is not on the backend yet: `typescript-eslint` requires TypeScript below 6.1 and the backend uses TypeScript 7. Add it when support ships. Until then, `tsc` strict mode and its unused-code checks do part of that job.

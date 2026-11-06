@@ -54,7 +54,7 @@ Roughly 4–6 weeks part-time. Adjust around your semester schedule.
 |---|---|---|---|
 | 0 Setup | | | |
 | 1 Design | | | |
-| 2 Backend foundation | | | |
+| 2 Backend foundation | Code complete, register and login checked in Postman, PR pending | 2026-11-05 | |
 | 3 Catalog | | | |
 | 4 Orders | | | |
 | 5 Public frontend | | | |

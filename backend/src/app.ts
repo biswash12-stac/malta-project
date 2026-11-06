@@ -6,8 +6,8 @@ import pinoHttp from "pino-http";
 
 import { env } from "./config/env.js";
 import { logger } from "./utils/logger.js";
-import { router } from "./routes/route.js";
-import { errorHandler, notFoundHandler } from "./middleware/error.middleware.js";
+import { router } from "./routes.js";
+import { errorHandler, notFoundHandler } from "./middlewares/error.middleware.js";
 
 export const app = express();
 

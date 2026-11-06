@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { sendSuccess } from "../utils/api-response.js";
+import { authRoutes } from "./modules/auth/auth.routes.js";
+import { sendSuccess } from "./utils/api-response.js";
 
 export const router = Router();
 
@@ -12,8 +13,9 @@ router.get("/health", (_req, res) => {
   sendSuccess(res, { status: "ok", uptime: process.uptime() });
 });
 
+router.use("/auth", authRoutes);
+
 // Modules are mounted here as we build them:
-// router.use("/auth", authRoutes);
 // router.use("/products", productRoutes);
 // router.use("/categories", categoryRoutes);
 // router.use("/orders", orderRoutes);

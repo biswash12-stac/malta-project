@@ -3,10 +3,10 @@
 ## 1. Functional Requirements
 
 ### Authentication
-- FR-1: Visitor can register with name, email, phone, password.
+- FR-1: Visitor can register with username, email, password. Login uses email and password.
 - FR-2: User can log in; JWT is issued in an httpOnly cookie.
 - FR-3: Admin accounts are created by seed script only.
-- FR-4: Passwords are hashed with bcrypt.
+- FR-4: Passwords are hashed with bcrypt, and must be at least 8 characters and at most 72 bytes (bcrypt ignores anything longer).
 
 ### Catalog
 - FR-5: Anyone can view products with category filter, search, pagination.
@@ -42,7 +42,7 @@
 ## 3. Data Model
 Money is stored as integer cents (EUR). Orders keep snapshots of product name and price.
 
-**User**: _id, name, email (unique), phone, passwordHash, role (customer | admin), createdAt
+**User**: _id, username, email (unique), passwordHash, role (customer | admin), createdAt
 
 **Category**: _id, name, slug (unique), isActive
 
@@ -56,7 +56,7 @@ Money is stored as integer cents (EUR). Orders keep snapshots of product name an
 | Auth | POST /auth/register, POST /auth/login, POST /auth/logout, GET /auth/me |
 | Products | GET /products, GET /products/:slug; admin: POST /products, PATCH /products/:id, DELETE /products/:id |
 | Categories | GET /categories; admin: POST, PATCH, DELETE |
-| Orders (customer) | POST /orders, GET /orders/mine, GET /orders/:id, GET /orders/track?orderNumber=&phone= |
+| Orders (customer) | POST /orders, GET /orders/mine, GET /orders/track?orderNumber=&phone=, GET /orders/:id (register `mine` and `track` before `:id`, or `:id` will capture them) |
 | Orders (admin) | GET /admin/orders, GET /admin/orders/:id, PATCH /admin/orders/:id/status, PATCH /admin/orders/:id/delivery-date, PATCH /admin/orders/:id/payment |
 | Admin | GET /admin/stats |
 | Uploads | POST /admin/uploads |
