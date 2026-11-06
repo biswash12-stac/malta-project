@@ -1,6 +1,6 @@
 # Project Memory
 
-Keep this in the repo root. Paste it at the start of every AI session. Update it at the end of every phase.
+Paste this at the start of every AI session. Update it at the end of every phase.
 
 ## Project Summary
 Nepali grocery e-commerce site for a Nepali client in Malta. Customers order and pay by cash on delivery, and track order status. Admin manages products and orders.
@@ -23,6 +23,7 @@ Nepali grocery e-commerce site for a Nepali client in Malta. Customers order and
 - Strict order status state machine; every change logged in statusHistory.
 - Products are soft-deleted.
 - Admin created by seed script only.
+- Login cookie is `SameSite=Lax`; site and API share one parent domain.
 - Budget and scope agreed and frozen; new features are change requests.
 
 ## Enums
@@ -32,10 +33,11 @@ Nepali grocery e-commerce site for a Nepali client in Malta. Customers order and
 - Roles: `customer`, `admin`
 
 ## Current Status
-- Current phase: (update)
-- Done: (update)
-- In progress: (update)
-- Blocked: (update)
+- Current phase: Phase 2 code complete; register and login checked in Postman; `/me`, logout and the PR still to do.
+- Done: backend foundation, user model, auth routes, JWT cookie, role middleware, admin seed, automated auth tests.
+- In progress: nothing.
+- Next: Phase 3 (catalog API).
+- Blocked: backend ESLint (no TypeScript 7 support yet). Frontend coding needs written design approval (Phase 1), and no approval is recorded yet.
 
 ## Open Questions for Client
 - Delivery fee and delivery areas in Malta?
@@ -46,7 +48,12 @@ Nepali grocery e-commerce site for a Nepali client in Malta. Customers order and
 ## Change Log
 | Date | Change | Reason |
 |---|---|---|
-| | | |
+| 2026-11-06 | Use envalid (not zod) for env, bcryptjs (not bcrypt) | Already in the code; envalid suits env checks, bcryptjs needs no native build |
+| 2026-11-06 | Removed `async-handler.ts` | Express 5 handles async errors itself |
+| 2026-11-06 | Backend has no ESLint for now | `typescript-eslint` does not support TypeScript 7 |
+| 2026-11-06 | Site and API must share a parent domain | Next.js middleware can't otherwise read the login cookie |
+| 2026-11-06 | Tests use in-memory MongoDB | Tests never touch a real database |
+| 2026-11-06 | Register takes username, email, password; no phone on the account | Simpler signup; phone is still collected per order at checkout (FR-9) |
 
 ## Working Rules Reminder
 Follow `rules.md`. Do not add features outside `PRD.md`. Keep controllers thin and services smart.

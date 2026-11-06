@@ -2,47 +2,14 @@ import type { Request, Response, NextFunction } from "express";
 import { ZodError } from "zod";
 import mongoose from "mongoose";
 import { logger } from "../utils/logger.js";
+import { AppError } from "../utils/app-error.js";
 import type { ApiError } from "../utils/api-response.js";
-
-export class AppError extends Error {
-  public readonly statusCode: number;
-  public readonly code: string;
-  public readonly details?: unknown;
-
-  constructor(statusCode: number, code: string, message: string, details?: unknown) {
-    super(message);
-    this.statusCode = statusCode;
-    this.code = code;
-    this.details = details;
-    Error.captureStackTrace(this, this.constructor);
-  }
-
-  static badRequest(message: string, details?: unknown) {
-    return new AppError(400, "VALIDATION_ERROR", message, details);
-  }
-  static unauthorized(message = "Not authenticated") {
-    return new AppError(401, "UNAUTHENTICATED", message);
-  }
-  static forbidden(message = "Forbidden") {
-    return new AppError(403, "FORBIDDEN", message);
-  }
-  static notFound(message = "Not found") {
-    return new AppError(404, "NOT_FOUND", message);
-  }
-  static conflict(message: string) {
-    return new AppError(409, "CONFLICT", message);
-  }
-  static internal(message = "Internal server error") {
-    return new AppError(500, "INTERNAL", message);
-  }
-}
 
 export const notFoundHandler = (req: Request, _res: Response, next: NextFunction) => {
   next(AppError.notFound(`Route ${req.method} ${req.originalUrl} not found`));
 };
 
 // Express recognizes an error middleware by its 4-arg signature.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const errorHandler = (
   err: unknown,
   req: Request,
@@ -82,6 +49,15 @@ export const errorHandler = (
     return;
   }
 
+  // mongoose schema validation — data that zod let through but the model rejects
+  if (err instanceof mongoose.Error.ValidationError) {
+    res.status(400).json({
+      success: false,
+      error: { code: "VALIDATION_ERROR", message: "Invalid input" },
+    });
+    return;
+  }
+
   // mongoose duplicate key (unique index violation)
   if (
     typeof err === "object" &&
@@ -96,10 +72,26 @@ export const errorHandler = (
     return;
   }
 
+  // Express and body-parser mark client errors with a status: broken JSON (400), body too big (413)
+  const status = (err as { status?: unknown } | null)?.status;
+  if (typeof status === "number" && status >= 400 && status < 500) {
+    res.status(status).json({
+      success: false,
+      error: { code: "BAD_REQUEST", message: "Invalid request" },
+    });
+    return;
+  }
+
   // Unknown — log with stack, never leak to client
   const message = err instanceof Error ? err.message : "Unknown error";
   const stack = err instanceof Error ? err.stack : undefined;
-  logger.error({ msg: "Unhandled error", path: req.originalUrl, method: req.method, message, stack });
+  logger.error({
+    msg: "Unhandled error",
+    path: req.originalUrl,
+    method: req.method,
+    message,
+    stack,
+  });
 
   res.status(500).json({
     success: false,

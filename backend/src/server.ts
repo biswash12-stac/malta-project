@@ -9,7 +9,12 @@ const start = async (): Promise<void> => {
   await connectDB();
 
   // 2. Bind the port.
-  const server = app.listen(env.PORT, () => {
+  const server = app.listen(env.PORT, (err?: Error) => {
+    // Express 5 also calls this when binding fails, e.g. the port is already in use.
+    if (err) {
+      logger.error(`Could not listen on port ${env.PORT}: ${err.message}`);
+      process.exit(1);
+    }
     logger.info(`Server listening on http://localhost:${env.PORT} (${env.NODE_ENV})`);
   });
 
