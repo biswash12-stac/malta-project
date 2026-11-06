@@ -1,14 +1,27 @@
 import { z } from "zod";
+import { env } from "../../config/env.js";
 import { objectIdSchema, paginationQuerySchema } from "../../utils/common.schema.js";
 import { slugify } from "../../utils/slugify.js";
+import { UPLOAD_FOLDER } from "../uploads/upload.service.js";
 
 const priceInCents = z.number().int().positive();
 
-const productImageSchema = z.strictObject({
-  // Only Cloudinary images over HTTPS, so a product can't point at an arbitrary site.
-  url: z.url({ protocol: /^https$/, hostname: /^res\.cloudinary\.com$/ }),
-  publicId: z.string().min(1).max(255),
-});
+const productImageSchema = z
+  .strictObject({
+    url: z.url({ protocol: /^https$/, hostname: /^res\.cloudinary\.com$/ }),
+    // Limited to our folder, because this id is what gets deleted when an image is replaced.
+    publicId: z
+      .string()
+      .regex(new RegExp(`^${UPLOAD_FOLDER}/[\\w./-]+$`))
+      .max(255),
+  })
+  // Only images in our own account, so a product can't point at someone else's files.
+  .refine(
+    ({ url, publicId }) =>
+      new URL(url).pathname.startsWith(`/${env.CLOUDINARY_CLOUD_NAME}/image/upload/`) &&
+      url.includes(publicId),
+    "Image must be one uploaded to this store"
+  );
 
 const productFields = {
   nameEn: z

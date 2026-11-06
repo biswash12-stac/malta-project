@@ -78,6 +78,10 @@ before(async () => {
   process.env.JWT_SECRET = "test-secret-".repeat(4);
   process.env.NODE_ENV = "test";
   process.env.LOG_LEVEL = "fatal";
+  // Empty secret: these tests must never reach a real Cloudinary account.
+  process.env.CLOUDINARY_CLOUD_NAME = "demo";
+  process.env.CLOUDINARY_API_KEY = "";
+  process.env.CLOUDINARY_API_SECRET = "";
 
   const { app } = await import("../src/app.js");
   const { connectDB } = await import("../src/config/db.js");
@@ -103,6 +107,12 @@ after(async () => {
   server.close();
   await mongoose.disconnect();
   await mongo.stop();
+});
+
+test("upload signatures return a clear error when Cloudinary isn't configured", async () => {
+  const res = await asAdmin("POST", "/admin/uploads/signature");
+  assert.equal(res.status, 503);
+  assert.equal(res.body.error.code, "UPLOADS_NOT_CONFIGURED");
 });
 
 test("only admins can write or use the admin routes", async () => {
@@ -161,18 +171,26 @@ test("public responses contain only public fields", async () => {
   const product = await create({
     description: "Full details",
     shopRating: 4.5,
-    images: [{ url: "https://res.cloudinary.com/demo/image/upload/a.jpg", publicId: "secret-id" }],
+    images: [
+      {
+        url: "https://res.cloudinary.com/demo/image/upload/v1/products/a.jpg",
+        publicId: "products/a",
+      },
+    ],
   });
 
   const detail = await api("GET", `/products/${product.slug}`);
   const raw = JSON.stringify(detail.body);
-  for (const hidden of ["priceHistory", "secret-id", "isActive", "createdAt", "__v"]) {
+  for (const hidden of ["priceHistory", "publicId", "isActive", "createdAt", "__v"]) {
     assert.ok(!raw.includes(hidden), hidden);
   }
   const found = detail.body.data.product;
   assert.equal(found.description, "Full details");
   assert.equal(found.shopRating, 4.5);
-  assert.equal(found.images[0].url, "https://res.cloudinary.com/demo/image/upload/a.jpg");
+  assert.equal(
+    found.images[0].url,
+    "https://res.cloudinary.com/demo/image/upload/v1/products/a.jpg"
+  );
   assert.equal(found.category.name, "Groceries");
 
   const list = await api("GET", "/products?limit=50");
@@ -180,7 +198,7 @@ test("public responses contain only public fields", async () => {
   assert.equal(inList.description, undefined, "lists don't send descriptions");
 
   const admin = await asAdmin("GET", `/admin/products/${product._id}`);
-  assert.equal(admin.body.data.product.images[0].publicId, "secret-id");
+  assert.equal(admin.body.data.product.images[0].publicId, "products/a");
   assert.equal(admin.body.data.product.isActive, true);
   assert.ok(!JSON.stringify(admin.body).includes("priceHistory"));
 });

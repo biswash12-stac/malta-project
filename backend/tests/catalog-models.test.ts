@@ -51,6 +51,7 @@ before(async () => {
   process.env.JWT_SECRET = "test-secret-".repeat(4);
   process.env.NODE_ENV = "test";
   process.env.LOG_LEVEL = "fatal";
+  process.env.CLOUDINARY_CLOUD_NAME = "demo";
 
   ({ CategoryModel } = await import("../src/modules/categories/category.model.js"));
   ({ ProductModel } = await import("../src/modules/products/product.model.js"));
@@ -225,7 +226,12 @@ test("the create schema accepts a valid product and rejects bad ones", () => {
         offerPrice: 999,
         shopRating: 4.5,
         description: "Long grain",
-        images: [{ url: "https://res.cloudinary.com/demo/image/upload/a.jpg", publicId: "a" }],
+        images: [
+          {
+            url: "https://res.cloudinary.com/demo/image/upload/v1/products/a.jpg",
+            publicId: "products/a",
+          },
+        ],
       })
     ).success
   );

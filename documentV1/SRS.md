@@ -4,7 +4,10 @@
 
 ### Authentication
 - FR-1: Visitor can register with username, email, password. Login uses email and password.
-- FR-2: User can log in; JWT is issued in an httpOnly cookie.
+- FR-2: User can log in with a password or Google. Sessions use two httpOnly cookies: a 15-minute access token and a 7-day refresh token that is replaced on each use. Tokens never appear in response bodies.
+- FR-2a: User can reset a forgotten password through an emailed link that expires in 30 minutes and works once. A reset ends all sessions.
+- FR-2b: User can turn on two-factor login by email. Password and Google logins then also need a 6-digit emailed code.
+- FR-2c: Google sign-in creates a customer for a new email. Linking to an account whose email was never verified removes its password and sessions.
 - FR-3: Admin accounts are created by seed script only. The script refuses an email that belongs to a customer, and requires a password of at least 12 characters.
 - FR-4: Passwords are hashed with bcrypt, and must be at least 8 characters and at most 72 bytes (bcrypt ignores anything longer). Common passwords are rejected.
 
@@ -44,7 +47,9 @@
 ## 3. Data Model
 Money is stored as integer cents (EUR). Orders keep snapshots of product name and price.
 
-**User**: _id, username, email (unique), passwordHash, role (customer | admin), tokenVersion, createdAt
+**User**: _id, username, email (unique), passwordHash (absent on Google-only accounts), role (customer | admin), tokenVersion, googleId, emailVerified, passwordResetToken, passwordResetExpires, twoFactorEnabled, twoFactorCode, twoFactorExpires, twoFactorAttempts, twoFactorNextCodeAt, createdAt
+
+**RefreshSession**: _id, user (ref), tokenHash (unique), tokenVersion, replacedAt, expiresAt (removed automatically)
 
 **Category**: _id, name, slug (unique), isActive
 
@@ -55,13 +60,14 @@ Money is stored as integer cents (EUR). Orders keep snapshots of product name an
 ## 4. API Summary (prefix /api/v1)
 | Area | Endpoints |
 |---|---|
-| Auth | POST /auth/register, POST /auth/login, POST /auth/logout, GET /auth/me |
+| Auth | POST /auth/register, POST /auth/login, POST /auth/google, POST /auth/refresh, POST /auth/logout, GET /auth/me, POST /auth/forgot-password, POST /auth/reset-password |
+| 2FA | POST /auth/2fa/enable, /verify, /validate, /disable/request, /disable |
 | Products | GET /products?q=&category=&featured=true, GET /products/:slug; admin: POST /products, PATCH /products/:id, DELETE /products/:id, GET /admin/products?q=&category=&isActive=, GET /admin/products/:id |
 | Categories | GET /categories; admin: POST /categories, PATCH /categories/:id, DELETE /categories/:id, GET /admin/categories (includes hidden) |
 | Orders (customer) | POST /orders, GET /orders/mine, GET /orders/track?orderNumber=&phone=, GET /orders/:id (register `mine` and `track` before `:id`, or `:id` will capture them) |
 | Orders (admin) | GET /admin/orders, GET /admin/orders/:id, PATCH /admin/orders/:id/status, PATCH /admin/orders/:id/delivery-date, PATCH /admin/orders/:id/payment |
 | Admin | GET /admin/stats |
-| Uploads | POST /admin/uploads |
+| Uploads | Admin: POST /admin/uploads/signature. The browser then sends the file straight to Cloudinary |
 
 Lists: `data` is `{ items, pagination: { page, limit, total, totalPages } }`, with `?page=` (default 1) and `?limit=` (default 20, max 50).
 
@@ -69,4 +75,4 @@ Success: `{ success: true, data, message }`
 Error: `{ success: false, error: { code, message, details } }`
 
 ## 5. Constraints
-Low hosting cost; Cloudinary free tier for images; email notifications not in v1.
+Low hosting cost; Cloudinary free tier for images. Email is used only for password resets and 2FA codes (Nodemailer with a free SMTP provider); order notifications are not in v1.

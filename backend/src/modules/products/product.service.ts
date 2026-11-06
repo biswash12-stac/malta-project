@@ -4,6 +4,7 @@ import type { PaginationQuery } from "../../utils/common.schema.js";
 import { pageOf, skipFor } from "../../utils/pagination.js";
 import { slugify } from "../../utils/slugify.js";
 import { CategoryModel } from "../categories/category.model.js";
+import { deleteImagesInBackground } from "../uploads/upload.service.js";
 import { ProductModel, type Product } from "./product.model.js";
 import { applyPriceRules } from "./product.pricing.js";
 import type {
@@ -129,11 +130,24 @@ export const updateProduct = async (id: string, input: UpdateProductInput) => {
   if (!product) throw AppError.notFound("Product not found");
 
   const previousPrice = product.offerPrice ?? product.price;
+  const previousImages = product.images.map((image) => image.publicId);
   // The slug isn't set here: product URLs stay the same when a product is renamed.
   product.set(input);
   applyPriceRules(product, previousPrice);
   await product.save(); // save() runs the model's offer price check against the stored price
+
+  const kept = new Set(product.images.map((image) => image.publicId));
+  await deleteUnusedImages(previousImages.filter((publicId) => !kept.has(publicId)));
   return getAdminProduct(id);
+};
+
+// Only after the save, so a rejected edit can't lose an image. Skips any image another product uses.
+const deleteUnusedImages = async (publicIds: string[]) => {
+  if (publicIds.length === 0) return;
+  const inUse = new Set<string>(
+    await ProductModel.distinct("images.publicId", { "images.publicId": { $in: publicIds } })
+  );
+  deleteImagesInBackground(publicIds.filter((publicId) => !inUse.has(publicId)));
 };
 
 // Soft delete: orders and history can still refer to the product.

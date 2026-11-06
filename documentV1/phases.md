@@ -55,7 +55,7 @@ Roughly 4–6 weeks part-time. Adjust around your semester schedule.
 | 0 Setup | | | |
 | 1 Design | | | |
 | 2 Backend foundation | Done | 2026-11-05 | 2026-11-06 |
-| 3 Catalog | In progress | 2026-11-06 | |
+| 3 Catalog | Code complete, PR pending | 2026-11-06 | |
 | 4 Orders | | | |
 | 5 Public frontend | | | |
 | 6 Admin dashboard | | | |

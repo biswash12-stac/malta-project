@@ -84,7 +84,7 @@ test("register creates a customer, sets a safe cookie, never returns the hash", 
   assert.equal(JSON.parse(raw).data.user.role, "customer");
 
   const cookie = res.headers.getSetCookie()[0] ?? "";
-  assert.match(cookie, /^auth_token=/);
+  assert.match(cookie, /^access_token=/);
   assert.match(cookie, /HttpOnly/);
   assert.match(cookie, /SameSite=Lax/);
 });
@@ -132,7 +132,7 @@ test("login, me and logout work as one session", async () => {
   assert.equal((await me.json()).data.user.email, customer.email);
 
   const logout = await post("/api/v1/auth/logout", {});
-  assert.match(logout.headers.getSetCookie()[0] ?? "", /^auth_token=;/);
+  assert.match(logout.headers.getSetCookie()[0] ?? "", /^access_token=;/);
 });
 
 test("me rejects a missing or tampered token", async () => {

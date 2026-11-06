@@ -35,8 +35,9 @@ Nepali grocery e-commerce site for a Nepali client in Malta. Customers order and
 ## Current Status
 - Current phase: Phase 3 (catalog API).
 - Done: Phase 2 (backend foundation, user model, auth routes, JWT cookie, role middleware, admin seed, automated auth tests).
-- In progress: Category and Product APIs, indexes and `validateRequest` are built; signed uploads are left.
-- Next: signed Cloudinary uploads, when the backend developer says to start. Security audit code fixes are done; separating production secrets is a launch task (see `backend/PROGRESS.md`).
+- In progress: Phase 3 code is complete: category and product APIs, indexes, `validateRequest` and signed Cloudinary uploads. PRs are pending.
+- Auth upgrade (access and refresh tokens, password reset, email 2FA, Google login) is built on `feature/auth-upgrade`. Real email and Google sign-in still need the developer's accounts and a live test.
+- Next: commit the work, then fix the whole-repo audit findings (see `backend/PROGRESS.md`). Phase 4 (orders) needs client answers first. Security audit code fixes are done; separating production secrets is a launch task (see `backend/PROGRESS.md`).
 - Blocked: backend ESLint (no TypeScript 7 support yet). Frontend coding needs written design approval (Phase 1), and no approval is recorded yet.
 
 ## Open Questions for Client
@@ -54,6 +55,10 @@ Nepali grocery e-commerce site for a Nepali client in Malta. Customers order and
 | 2026-11-06 | Site and API must share a parent domain | Next.js middleware can't otherwise read the login cookie |
 | 2026-11-06 | Tests use in-memory MongoDB | Tests never touch a real database |
 | 2026-11-06 | Products get nameEn + nameNp, offerPrice and an admin-set shopRating | Backend developer's decision; no customer review system in v1 |
+| 2026-11-06 | Signed direct uploads to Cloudinary, replacing the Multer plan | Secret stays on the server; files never pass through the API; no extra packages |
+| 2026-11-06 | Auth upgrade: access and refresh tokens, password reset, email 2FA, Google login | Backend developer's decision, outside the frozen PRD section 5; tell the client if it's a paid change |
+| 2026-11-06 | 2FA login uses a pending httpOnly cookie, not `userId`; reset token goes in the body, not the URL | Hides internal IDs; request logs record URLs |
+| 2026-11-06 | Google sign-in removes the password and sessions of an unverified customer account | Stops takeover by someone who registered the victim's email first |
 | 2026-11-06 | Added general and per-account rate limits; common passwords rejected; JSON bodies only; `NODE_ENV` required | Security audit fixes |
 | 2026-11-06 | Added `tokenVersion`; logout ends sessions on every device | Stolen tokens can now be cancelled |
 | 2026-11-06 | Admin seed refuses customer emails and passwords under 12 characters | Stops an attacker gaining admin by registering the owner's email first |

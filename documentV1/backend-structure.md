@@ -9,12 +9,16 @@ backend/
 │   ├── config/
 │   │   ├── env.ts                  # validated env variables (envalid)
 │   │   ├── db.ts                   # mongoose connection
-│   │   └── cloudinary.ts
 │   ├── modules/
 │   │   ├── auth/
 │   │   │   ├── auth.routes.ts
 │   │   │   ├── auth.controller.ts
 │   │   │   ├── auth.service.ts
+│   │   │   ├── session.service.ts      # access tokens, refresh rotation, revoking sessions
+│   │   │   ├── refresh-session.model.ts
+│   │   │   ├── password-reset.service.ts
+│   │   │   ├── two-factor.service.ts
+│   │   │   ├── google.service.ts
 │   │   │   └── auth.schema.ts      # zod schemas
 │   │   ├── users/
 │   │   │   ├── user.model.ts
@@ -56,12 +60,12 @@ backend/
 │   │   ├── role.middleware.ts          # requireRole('admin')
 │   │   ├── validate.middleware.ts      # zod validation
 │   │   ├── rate-limit.middleware.ts
-│   │   ├── upload.middleware.ts        # multer
 │   │   └── error.middleware.ts         # global error handler
 │   ├── utils/
 │   │   ├── app-error.ts
 │   │   ├── api-response.ts
 │   │   ├── logger.ts
+│   │   ├── mailer.ts                   # Nodemailer; logs emails in development without SMTP
 │   │   ├── common.schema.ts            # shared pagination and id schemas
 │   │   ├── pagination.ts               # skip value and list response shape
 │   │   ├── slugify.ts
@@ -93,6 +97,6 @@ backend/
 - The default query parser reads `?page[$gt]=1` as a literal key, not a nested object. Query schemas use `z.strictObject` so these params return a 400.
 
 ## Packages
-- Runtime: express, mongoose, zod, envalid, jsonwebtoken, bcryptjs, cookie-parser, cors, helmet, express-rate-limit, dotenv, pino, pino-http. Add multer and cloudinary in Phase 3.
+- Runtime: express, mongoose, zod, envalid, jsonwebtoken, bcryptjs, nodemailer, google-auth-library, cookie-parser, cors, helmet, express-rate-limit, dotenv, pino, pino-http. Cloudinary uploads need no package: they use Node's `crypto` and `fetch`.
 - Dev: typescript, tsx, prettier, mongodb-memory-server, @types/*
 - ESLint is not on the backend yet: `typescript-eslint` requires TypeScript below 6.1 and the backend uses TypeScript 7. Add it when support ships. Until then, `tsc` strict mode and its unused-code checks do part of that job.

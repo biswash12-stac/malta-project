@@ -27,6 +27,28 @@ export const accountLoginRateLimit = rateLimit({
   keyGenerator: (req) => (req.body as { email: string }).email,
 });
 
+// A normal session refreshes about four times an hour per tab.
+export const refreshRateLimit = rateLimit({
+  ...limitOptions,
+  windowMs: 15 * 60 * 1000,
+  limit: 60,
+});
+
+// Each request sends an email, so these stop inbox flooding and running through the free tier.
+const FORGOT_PASSWORD_LIMITS = { windowMs: 60 * 60 * 1000, limit: 5 };
+
+export const forgotPasswordIpRateLimit = rateLimit({
+  ...limitOptions,
+  ...FORGOT_PASSWORD_LIMITS,
+});
+
+// Use after validateRequest, so the email is already checked and lowercased.
+export const forgotPasswordEmailRateLimit = rateLimit({
+  ...limitOptions,
+  ...FORGOT_PASSWORD_LIMITS,
+  keyGenerator: (req) => (req.body as { email: string }).email,
+});
+
 // shortcut: Next.js server rendering sends catalog requests from one server IP, raise this limit if real traffic reaches it.
 export const generalRateLimit = rateLimit({
   ...limitOptions,

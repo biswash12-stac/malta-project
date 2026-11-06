@@ -22,6 +22,11 @@ const jwtSecret = makeValidator<string>((input) => {
   throw new Error("JWT_SECRET must be at least 32 characters");
 });
 
+const twoFactorSecret = makeValidator<string>((input) => {
+  if (input.length >= 32) return input;
+  throw new Error("TWO_FACTOR_SECRET must be at least 32 characters");
+});
+
 const proxyHops = makeValidator<number>((input) => {
   const hops = Number(input);
   if (Number.isInteger(hops) && hops >= 0) return hops;
@@ -43,6 +48,26 @@ export const env = cleanEnv(process.env, {
   MONGODB_URI: mongoUri(),
 
   JWT_SECRET: jwtSecret(),
+
+  // Protects stored 2FA codes. A 6-digit code hashed without a secret can be cracked instantly.
+  TWO_FACTOR_SECRET: twoFactorSecret({
+    devDefault: "development-only-two-factor-secret",
+  }),
+
+  // Email. In development, leave SMTP_HOST empty to print emails to the log instead of sending.
+  SMTP_HOST: str({ devDefault: "" }),
+  SMTP_PORT: port({ devDefault: 587 }),
+  SMTP_USER: str({ devDefault: "" }),
+  SMTP_PASS: str({ devDefault: "" }),
+  MAIL_FROM: str({ devDefault: "no-reply@localhost" }),
+
+  // From Google Cloud Console. Not a secret: the frontend's sign-in button uses it too.
+  GOOGLE_CLIENT_ID: str({ devDefault: "" }),
+
+  // Product images. The API secret only ever signs requests on this server.
+  CLOUDINARY_CLOUD_NAME: str({ devDefault: "" }),
+  CLOUDINARY_API_KEY: str({ devDefault: "" }),
+  CLOUDINARY_API_SECRET: str({ devDefault: "" }),
 
   // How many proxies sit in front of the API. Too high lets clients fake their IP and dodge
   // rate limits; too low puts all users under one limit. Required in production.

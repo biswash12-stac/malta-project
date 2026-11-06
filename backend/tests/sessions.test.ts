@@ -130,7 +130,7 @@ test("logout cancels the token on every device", async () => {
 
   const res = await post("logout", {}, firstDevice);
   assert.equal(res.status, 200);
-  assert.match(res.headers.getSetCookie()[0] ?? "", /^auth_token=;/);
+  assert.match(res.headers.getSetCookie()[0] ?? "", /^access_token=;/);
 
   assert.equal(await meStatus(firstDevice), 401, "a copied token stops working");
   assert.equal(await meStatus(secondDevice), 401);
@@ -149,8 +149,8 @@ test("an old token can't log out a newer session", async () => {
 
 test("logout still succeeds with no cookie or a bad one", async () => {
   assert.equal((await post("logout", {})).status, 200);
-  assert.equal((await post("logout", {}, "auth_token=garbage")).status, 200);
-  assert.equal((await post("logout", {}, 'auth_token=j:{"a":1}')).status, 200);
+  assert.equal((await post("logout", {}, "access_token=garbage")).status, 200);
+  assert.equal((await post("logout", {}, 'access_token=j:{"a":1}')).status, 200);
 });
 
 test("tokens without a version, like those issued before this change, are rejected", async () => {
@@ -161,7 +161,7 @@ test("tokens without a version, like those issued before this change, are reject
     subject: user.id,
     expiresIn: 60,
   });
-  assert.equal(await meStatus(`auth_token=${oldStyle}`), 401);
+  assert.equal(await meStatus(`access_token=${oldStyle}`), 401);
 });
 
 test("accounts created before this change can still log in", async () => {
