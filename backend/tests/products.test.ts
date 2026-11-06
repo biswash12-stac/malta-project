@@ -286,6 +286,23 @@ test("search covers both names and the description; filters and pages work", asy
   );
 });
 
+test("the largest valid product fits the request size limit", async () => {
+  const longId = "a".repeat(200);
+  const product = await create({
+    nameEn: "x".repeat(150),
+    nameNp: "क".repeat(150),
+    description: "क".repeat(5000),
+    images: Array.from({ length: 10 }, (_, i) => ({
+      url: `https://res.cloudinary.com/demo/image/upload/v1700000000/products/${longId}${i}.jpg`,
+      publicId: `products/${longId}${i}`,
+    })),
+  });
+  assert.equal(product.description.length, 5000);
+
+  const tooBig = await asAdmin("POST", "/products", body({ description: "क".repeat(12_000) }));
+  assert.equal(tooBig.status, 413);
+});
+
 test("query and param validation, including injection attempts", async () => {
   for (const query of [
     "page=abc",

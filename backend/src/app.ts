@@ -46,9 +46,10 @@ app.use(
 // After CORS, so a blocked browser still gets a readable 429. Before body parsing, to save the work.
 app.use(generalRateLimit);
 
-// Body parsing. Limit is small on purpose — our API never accepts large bodies.
+// Body parsing. Limit is small on purpose, but must fit the largest valid product: a Nepali
+// description takes 3 bytes per character (about 15 KB) and ten image records add about 5 KB.
 // JSON only: browsers can post HTML forms from any site, but not JSON without passing CORS.
-app.use(express.json({ limit: "10kb" }));
+app.use(express.json({ limit: "32kb" }));
 
 // Cookies (used for JWT auth cookie, later).
 app.use(cookieParser());

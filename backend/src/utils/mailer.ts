@@ -8,6 +8,10 @@ const transport = env.SMTP_HOST
       port: env.SMTP_PORT,
       secure: env.SMTP_PORT === 465,
       auth: { user: env.SMTP_USER, pass: env.SMTP_PASS },
+      // 2FA login waits for this email, so a mail server that stops answering must fail quickly.
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 20_000,
     })
   : nodemailer.createTransport({ jsonTransport: true });
 

@@ -186,7 +186,7 @@ test("seed script creates an admin who can log in, and is safe to re-run", async
 
 test("client mistakes return 4xx, not 500", async () => {
   assert.equal((await post("/api/v1/auth/logout", "{bad")).status, 400);
-  const big = await post("/api/v1/auth/logout", { a: "x".repeat(20_000) });
+  const big = await post("/api/v1/auth/logout", { a: "x".repeat(40_000) });
   assert.equal(big.status, 413);
   assert.equal((await big.json()).error.code, "BAD_REQUEST");
 });

@@ -37,7 +37,7 @@ Nepali grocery e-commerce site for a Nepali client in Malta. Customers order and
 - Done: Phase 2 (backend foundation, user model, auth routes, JWT cookie, role middleware, admin seed, automated auth tests).
 - In progress: Phase 3 code is complete: category and product APIs, indexes, `validateRequest` and signed Cloudinary uploads. PRs are pending.
 - Auth upgrade (access and refresh tokens, password reset, email 2FA, Google login) is built on `feature/auth-upgrade`. Real email and Google sign-in still need the developer's accounts and a live test.
-- Next: commit the work, then fix the whole-repo audit findings (see `backend/PROGRESS.md`). Phase 4 (orders) needs client answers first. Security audit code fixes are done; separating production secrets is a launch task (see `backend/PROGRESS.md`).
+- Next: open the catalog and auth PRs, and work through the remaining whole-repo audit findings (see `backend/PROGRESS.md`). Phase 4 (orders) needs client answers first. Security audit code fixes are done; separating production secrets is a launch task (see `backend/PROGRESS.md`).
 - Blocked: backend ESLint (no TypeScript 7 support yet). Frontend coding needs written design approval (Phase 1), and no approval is recorded yet.
 
 ## Open Questions for Client
