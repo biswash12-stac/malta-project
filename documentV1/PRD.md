@@ -43,7 +43,6 @@ Digital payment (Stripe or similar), email/SMS notifications, coupons, stock ale
 - Delivery estimate is manual: admin must keep it updated.
 
 ## 9. Open questions
-- Delivery fee and delivery areas in Malta?
-- Guest checkout allowed, or login required?
-- Minimum order amount?
 - Who provides product photos and descriptions?
+
+Answered on 2026-11-07: ordering requires login; €20.00 minimum order; €5.00 delivery below €30.00, free from €30.00; delivery covers all of Malta. See `SRS.md` FR-8a to FR-9.

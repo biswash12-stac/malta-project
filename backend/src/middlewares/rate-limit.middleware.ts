@@ -49,6 +49,15 @@ export const forgotPasswordEmailRateLimit = rateLimit({
   keyGenerator: (req) => (req.body as { email: string }).email,
 });
 
+// Each order holds back stock with no payment up front, so this limits how fast it can be drained.
+// Rejected attempts don't count, so a customer fixing their cart isn't blocked.
+export const orderRateLimit = rateLimit({
+  ...limitOptions,
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  skipFailedRequests: true,
+});
+
 // shortcut: Next.js server rendering sends catalog requests from one server IP, raise this limit if real traffic reaches it.
 export const generalRateLimit = rateLimit({
   ...limitOptions,

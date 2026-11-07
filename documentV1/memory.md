@@ -33,18 +33,15 @@ Nepali grocery e-commerce site for a Nepali client in Malta. Customers order and
 - Roles: `customer`, `admin`
 
 ## Current Status
-- Current phase: Phase 3 (catalog API).
-- Done: Phase 2 (backend foundation, user model, auth routes, JWT cookie, role middleware, admin seed, automated auth tests).
-- In progress: Phase 3 code is complete: category and product APIs, indexes, `validateRequest` and signed Cloudinary uploads. PRs are pending.
-- Auth upgrade (access and refresh tokens, password reset, email 2FA, Google login) is built on `feature/auth-upgrade`. Real email and Google sign-in still need the developer's accounts and a live test.
-- Next: open the catalog and auth PRs, and work through the remaining whole-repo audit findings (see `backend/PROGRESS.md`). Phase 4 (orders) needs client answers first. Security audit code fixes are done; separating production secrets is a launch task (see `backend/PROGRESS.md`).
+- Current phase: Phase 4 (orders), on `feature/orders`.
+- Done: Phase 2 (backend foundation, user model, auth routes, JWT cookie, role middleware, admin seed, automated auth tests) and Phase 3 (category and product APIs, indexes, `validateRequest`, signed Cloudinary uploads), merged in PRs #5, #6 and #7.
+- Auth upgrade (access and refresh tokens, password reset, email 2FA, Google login) is merged in PR #7. Real email and Google sign-in still need the developer's accounts and a live test.
+- Phase 4 order API is built with automated tests on `feature/orders`, and checkout was tested in Postman on Atlas. `GET /admin/stats` (FR-18) waits for Phase 6.
+- Next: merge the Phase 4 PR, and test real password reset and 2FA emails. Remaining whole-repo audit findings are in `backend/PROGRESS.md`. Security audit code fixes are done; separating production secrets is a launch task (see `backend/PROGRESS.md`).
 - Blocked: backend ESLint (no TypeScript 7 support yet). Frontend coding needs written design approval (Phase 1), and no approval is recorded yet.
 
 ## Open Questions for Client
-- Delivery fee and delivery areas in Malta?
-- Guest checkout allowed, or login required?
-- Minimum order amount?
-- Who provides product photos and descriptions?
+- Who provides product photos and descriptions? (The developer will seed 100 placeholder products; the client updates images in the admin dashboard.)
 
 ## Change Log
 | Date | Change | Reason |
@@ -70,6 +67,10 @@ Nepali grocery e-commerce site for a Nepali client in Malta. Customers order and
 | 2026-11-06 | Category slug follows its name | Keeps names unique through the slug's index |
 | 2026-11-06 | Product images store `{url, publicId}` | Cloudinary needs the id to delete replaced images |
 | 2026-11-06 | Register takes username, email, password; no phone on the account | Simpler signup; phone is still collected per order at checkout (FR-9) |
+| 2026-11-07 | Ordering requires login; `Order.user` is required; no guest tracking | Developer's decision for v1, replacing the optional guest flow |
+| 2026-11-07 | €20.00 minimum order; €5.00 delivery below €30.00, free from €30.00; all of Malta, any locality | Client's final business rules |
+| 2026-11-07 | Order items also store `unitSnapshot` | The name and price alone don't say what size was bought, and `unit` can change later |
+| 2026-11-07 | Checkout limited to 10 placed orders per 15 minutes per IP | Unpaid orders hold back stock, so this limits deliberate draining |
 
 ## Working Rules Reminder
 Follow `rules.md`. Do not add features outside `PRD.md`. Keep controllers thin and services smart.

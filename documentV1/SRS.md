@@ -20,7 +20,10 @@
 
 ### Cart and Checkout
 - FR-8: Cart lives on the client; server re-validates price and stock at checkout.
-- FR-9: Checkout requires delivery name, phone, address, locality; note optional.
+- FR-8a: Placing an order requires login (401 otherwise). Guests can browse and keep a client-side cart.
+- FR-8b: The subtotal must be at least €20.00, or checkout returns 400 `MINIMUM_ORDER_NOT_MET`.
+- FR-8c: Delivery costs €5.00 when the subtotal is below €30.00 and is free from €30.00. The server calculates the fee and total (subtotal + delivery fee), and rejects a client that sends them.
+- FR-9: Checkout requires delivery name, phone, address, locality; note optional. Delivery covers all of Malta, so any locality is accepted.
 - FR-10: Payment method is COD only; order stores paymentMethod = COD, paymentStatus = pending.
 - FR-11: Stock is decremented atomically when the order is created.
 
@@ -28,7 +31,7 @@
 - FR-12: Each order has a unique readable number, e.g. NG-20261105-0001.
 - FR-13: Status flow: pending → confirmed → packed → out_for_delivery → delivered. Cancelled allowed from pending or confirmed.
 - FR-14: Admin sets status and estimatedDeliveryDate; each change is saved in statusHistory with timestamp.
-- FR-15: Customer sees own orders and the status timeline. Optional guest tracking by order number + phone.
+- FR-15: Customer sees own orders and the status timeline. There is no guest tracking, because ordering requires login.
 - FR-16: On delivery, admin marks paymentStatus = paid (cash collected).
 
 ### Admin Dashboard
@@ -55,7 +58,7 @@ Money is stored as integer cents (EUR). Orders keep snapshots of product name an
 
 **Product**: _id, nameEn, nameNp, slug (unique), description, price, offerPrice (nullable), priorLowestPrice (nullable), priceHistory[] {price, from} (private), unit, stock, images[] {url, publicId}, category (ref), shopRating (nullable), isFeatured, isActive, timestamps
 
-**Order**: _id, orderNumber (unique), user (ref, nullable for guest), items[] {productId, nameSnapshot, priceSnapshot, qty}, subtotal, deliveryFee, total, delivery {name, phone, address, locality, note}, paymentMethod (COD | CARD later), paymentStatus (pending | paid | failed | refunded), status, estimatedDeliveryDate, statusHistory[] {status, at, by, note}, timestamps
+**Order**: _id, orderNumber (unique), user (ref, required), items[] {productId, nameSnapshot, unitSnapshot, priceSnapshot, qty}, subtotal, deliveryFee, total, delivery {name, phone, address, locality, note}, paymentMethod (COD | CARD later), paymentStatus (pending | paid | failed | refunded), status, estimatedDeliveryDate, statusHistory[] {status, at, by, note}, timestamps
 
 ## 4. API Summary (prefix /api/v1)
 | Area | Endpoints |
@@ -64,7 +67,7 @@ Money is stored as integer cents (EUR). Orders keep snapshots of product name an
 | 2FA | POST /auth/2fa/enable, /verify, /validate, /disable/request, /disable |
 | Products | GET /products?q=&category=&featured=true, GET /products/:slug; admin: POST /products, PATCH /products/:id, DELETE /products/:id, GET /admin/products?q=&category=&isActive=, GET /admin/products/:id |
 | Categories | GET /categories; admin: POST /categories, PATCH /categories/:id, DELETE /categories/:id, GET /admin/categories (includes hidden) |
-| Orders (customer) | POST /orders, GET /orders/mine, GET /orders/track?orderNumber=&phone=, GET /orders/:id (register `mine` and `track` before `:id`, or `:id` will capture them) |
+| Orders (customer) | POST /orders, GET /orders/mine, GET /orders/:id (register `mine` before `:id`, or `:id` will capture it) |
 | Orders (admin) | GET /admin/orders, GET /admin/orders/:id, PATCH /admin/orders/:id/status, PATCH /admin/orders/:id/delivery-date, PATCH /admin/orders/:id/payment |
 | Admin | GET /admin/stats |
 | Uploads | Admin: POST /admin/uploads/signature. The browser then sends the file straight to Cloudinary |

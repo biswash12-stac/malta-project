@@ -47,7 +47,7 @@ const listProducts = async (
 };
 
 // Products keep their own isActive, so reactivating a category restores them as they were.
-const notInHiddenCategory = async (): Promise<QueryFilter<Product>> => {
+export const notInHiddenCategory = async (): Promise<QueryFilter<Product>> => {
   const hidden = await CategoryModel.find({ isActive: false }).select("_id").lean();
   return hidden.length > 0 ? { category: { $nin: hidden.map(({ _id }) => _id) } } : {};
 };
