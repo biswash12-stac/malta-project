@@ -33,11 +33,11 @@ Nepali grocery e-commerce site for a Nepali client in Malta. Customers order and
 - Roles: `customer`, `admin`
 
 ## Current Status
-- Current phase: Phase 4 (orders), on `feature/orders`.
+- Current phase: Phase 4 (orders) is merged in PR #8. Phase 5 (public frontend) is next.
 - Done: Phase 2 (backend foundation, user model, auth routes, JWT cookie, role middleware, admin seed, automated auth tests) and Phase 3 (category and product APIs, indexes, `validateRequest`, signed Cloudinary uploads), merged in PRs #5, #6 and #7.
-- Auth upgrade (access and refresh tokens, password reset, email 2FA, Google login) is merged in PR #7. Real email and Google sign-in still need the developer's accounts and a live test.
-- Phase 4 order API is built with automated tests on `feature/orders`, and checkout was tested in Postman on Atlas. `GET /admin/stats` (FR-18) waits for Phase 6.
-- Next: merge the Phase 4 PR, and test real password reset and 2FA emails. Remaining whole-repo audit findings are in `backend/PROGRESS.md`. Security audit code fixes are done; separating production secrets is a launch task (see `backend/PROGRESS.md`).
+- Auth upgrade (access and refresh tokens, password reset, email 2FA, Google login) is merged in PR #7. Real password reset and 2FA emails are tested. Google sign-in still needs a client ID and a live test.
+- Phase 4 order API has automated tests, and checkout was tested in Postman on Atlas. `GET /admin/stats` (FR-18) waits for Phase 6.
+- Next: seed placeholder products and test Google sign-in. Remaining whole-repo audit findings are in `backend/PROGRESS.md`. Security audit code fixes are done; separating production secrets is a launch task (see `backend/PROGRESS.md`).
 - Blocked: backend ESLint (no TypeScript 7 support yet). Frontend coding needs written design approval (Phase 1), and no approval is recorded yet.
 
 ## Open Questions for Client
