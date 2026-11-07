@@ -33,7 +33,7 @@ Nepali grocery e-commerce site for a Nepali client in Malta. Customers order and
 - Roles: `customer`, `admin`
 
 ## Current Status
-- Current phase: Phase 4 (orders) is merged in PR #8. Phase 5 (public frontend) is next.
+- Current phase: Phases 5 (public frontend) and 6 (admin dashboard) are in progress. Phases 2, 3 and 4 are completed; Phase 4 (orders) was merged in PR #8.
 - Done: Phase 2 (backend foundation, user model, auth routes, JWT cookie, role middleware, admin seed, automated auth tests) and Phase 3 (category and product APIs, indexes, `validateRequest`, signed Cloudinary uploads), merged in PRs #5, #6 and #7.
 - Auth upgrade (access and refresh tokens, password reset, email 2FA, Google login) is merged in PR #7. Real password reset and 2FA emails are tested. Google sign-in still needs a client ID and a live test.
 - Phase 4 order API has automated tests, and checkout was tested in Postman on Atlas. `GET /admin/stats` (FR-18) waits for Phase 6.
