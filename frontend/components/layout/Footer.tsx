@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import {
   //   Facebook,
@@ -49,18 +49,13 @@ const footerGroups = [
 export default function Footer() {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
-  const [year, setYear] = useState<number | null>(2026);
 
-  useEffect(() => {
-    setYear(new Date().getFullYear());
-  }, []);
 
   const handleSubscribe = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!email.trim()) return;
 
-    // TODO: Connect this to the newsletter subscription API.
     setMessage("Newsletter API connection is coming soon.");
   };
 
@@ -219,7 +214,8 @@ export default function Footer() {
               </div>
 
               <p className="text-center text-xs text-gray-500">
-                © {year ?? 2026} Malta. All rights reserved.
+                {/* © {new Date().getFullYear()} Malta. All rights reserved. */}
+                  © 2026 Malta. All rights reserved.
               </p>
 
               {/* Payment Methods
