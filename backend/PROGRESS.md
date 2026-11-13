@@ -91,6 +91,8 @@ The security audit's code fixes are done. Finding 9 (production secrets) is a la
 ### Tests and tooling
 - 147 automated tests: `orders` (24), `products` (15), `two-factor` (14), `startup-and-email` (3), `auth` (12), `auth-tokens` (10), `catalog-models` (10), `google` (10), `uploads` (10), `categories` (9), `password-reset` (9), `sessions` (9), `validate` (7) and `hardening` (5). Database tests use a temporary in-memory MongoDB
 - The catalog tests fail if a list query scans the whole collection or sorts in memory
+- Jest and Supertest, run by `npm run test:jest` from `tests/jest/`, with 2 example tests (health check and an empty category list). `npm test` still runs the node:test suite only
+- Jest tests get blank SMTP, Cloudinary and Google values, and a database address that can't connect, before the app loads. Database tests use `startTestDb()` from `tests/jest/helpers/test-db.ts`
 - Prettier formatting
 - Backend README (local only, not on GitHub)
 
@@ -210,6 +212,9 @@ Error: `{ success: false, error: { code, message, details } }`
 | €20.00 minimum, €5.00 delivery below €30.00, free from €30.00, all of Malta | Client's final rules. The amounts are constants in `order.service.ts` |
 | The order number counter runs outside the checkout transaction | Parallel orders don't conflict on one row. A failed checkout can leave a gap in the numbers |
 | Order items also store `unitSnapshot`, and `nameSnapshot` is the English name | The unit says what size was bought and can change later |
+| Jest and Supertest added alongside the node:test suite, not replacing it | The developer's choice. The 147 existing tests keep working, and new tests can use either runner |
+| Jest strips TypeScript with SWC, not ts-jest | ts-jest needs TypeScript below 7 |
+| `test:jest` runs Node with `--experimental-vm-modules` | MongoDB driver 7.8 loads `os` with a dynamic `import()`, which Jest blocks otherwise, so every connection failed |
 | The admin list searches exact order numbers and phone numbers | Both use an index and stay fast on large lists |
 | Revenue counts orders that are delivered or paid, and "today" follows Malta's calendar | Developer's rule for FR-18. Under COD only a delivered order can be paid, so today this equals delivered orders. Order numbers already use Malta's date |
 | Stats live in the orders module, mounted at `/admin/stats` | They only read orders, so a separate module would add files without adding anything |
