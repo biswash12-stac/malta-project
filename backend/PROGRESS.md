@@ -67,6 +67,7 @@ The security audit's code fixes are done. Finding 9 (production secrets) is a la
 - Hiding a category hides its products from the public list, detail, search and filters
 - Offers store the lowest price of the previous 30 days as `priorLowestPrice`, and must be below it
 - Signed Cloudinary uploads: the backend signs, the browser uploads directly, and the API secret never leaves the server
+- Image size and format are enforced on product save: each image no product uses yet is looked up in Cloudinary (Admin API, Basic auth). It must be 5 MB or less (`UPLOAD_MAX_BYTES`) and stored as JPG, PNG or WebP. Otherwise the save returns a 400 with `details.images`, and the file is deleted. If Cloudinary can't be reached or sends a record without a numeric `bytes` and a text `format`, it returns a 503 `IMAGE_CHECK_UNAVAILABLE` and deletes nothing. Editing a product that doesn't exist returns 404 before any image is checked. The signature response also gives the browser `maxFileBytes` and `allowedMimeTypes`. 12 upload tests were added for this on 2026-11-13, so `uploads` went from 10 to 22, all passing locally
 - Product images must be in this store's Cloudinary account and `products` folder
 - Replaced images are deleted from Cloudinary in the background, unless another product uses them
 
@@ -92,7 +93,7 @@ The security audit's code fixes are done. Finding 9 (production secrets) is a la
 - The three numbers come from three queries run in parallel. Any query param returns a 400
 
 ### Tests and tooling
-- 153 automated tests: `orders` (30), `products` (15), `two-factor` (14), `startup-and-email` (3), `auth` (12), `auth-tokens` (10), `catalog-models` (10), `google` (10), `uploads` (10), `categories` (9), `password-reset` (9), `sessions` (9), `validate` (7) and `hardening` (5). Database tests use a temporary in-memory MongoDB
+- 165 automated tests: `orders` (30), `uploads` (22), `products` (15), `two-factor` (14), `startup-and-email` (3), `auth` (12), `auth-tokens` (10), `catalog-models` (10), `google` (10), `categories` (9), `password-reset` (9), `sessions` (9), `validate` (7) and `hardening` (5). Database tests use a temporary in-memory MongoDB
 - The catalog tests fail if a list query scans the whole collection or sorts in memory
 - Jest and Supertest, run by `npm run test:jest` from `tests/jest/`, with 7 tests: health, readiness, the version header, malformed JSON and an empty category list. `npm test` still runs the node:test suite only
 - Jest tests get blank SMTP, Cloudinary and Google values, and a database address that can't connect, before the app loads. Database tests use `startTestDb()` from `tests/jest/helpers/test-db.ts`
@@ -218,6 +219,8 @@ Error: `{ success: false, error: { code, message, details } }`
 | The order number counter runs outside the checkout transaction | Parallel orders don't conflict on one row. A failed checkout can leave a gap in the numbers |
 | Order items also store `unitSnapshot`, and `nameSnapshot` is the English name | The unit says what size was bought and can change later |
 | Jest and Supertest added alongside the node:test suite, not replacing it | The developer's choice. The 147 existing tests keep working, and new tests can use either runner |
+| Image size and format are checked on product save through Cloudinary's Admin API, not in the signature | Cloudinary's docs say signatures and upload presets can't limit file size. Checking the stored file uses Cloudinary's own size and format, not the file name |
+| `.gitignore` ignores `.env*` except `.env.example` | Any new `.env.something` file is safe by default |
 | Jest strips TypeScript with SWC, not ts-jest | ts-jest needs TypeScript below 7 |
 | `test:jest` runs Node with `--experimental-vm-modules` | MongoDB driver 7.8 loads `os` with a dynamic `import()`, which Jest blocks otherwise, so every connection failed |
 | The `Idempotency-Key` is saved inside the checkout transaction, with a unique index on user and key | Checking for the key before creating the order would still let two requests at the same moment both get through. The unique index makes the second one roll back, including its stock change |
@@ -241,7 +244,8 @@ Error: `{ success: false, error: { code, message, details } }`
 ### Whole-repo audit (still open)
 - [ ] Must fix, frontend: fake testimonials (1), made-up contact details and offers (5), blank admin pages (6), no login link or phone menu (7)
 - [x] `.gitignore` misses `.env.production` (8): `.env.production` and `.env.test` added on 2026-11-13
-- [ ] Should fix, backend and repo: no CI (10), no Secure cookie test (11), `ADMIN_PASSWORD` and the `test` database in `.env` (12), small leftovers (17)
+- [x] No CI (10): `.github/workflows/ci.yml` added on 2026-11-13. It runs the backend type check, `npm test`, `npm run test:jest`, and the frontend lint and build, with no secrets and with actions pinned to commit SHAs. Each command passed locally on 2026-11-13. The workflow itself hasn't run on GitHub yet
+- [ ] Should fix, backend and repo: no Secure cookie test (11), `ADMIN_PASSWORD` and the `test` database in `.env` (12), small leftovers (17)
 - [ ] Should fix, frontend: dead links (13), product shape doesn't match the API (14), ESLint error (15), unplanned placeholder features (16)
 - [ ] Nice to have: reject a trailing slash in `CLIENT_URL` (18), return 409 for parallel product edits (19), fix drifted docs (20)
 
@@ -274,7 +278,8 @@ Error: `{ success: false, error: { code, message, details } }`
 
 - `shopRating` is typed in by the admin and doesn't come from customer reviews. The frontend must label it as the shop's own rating, with no review counts.
 - An image uploaded but never saved to a product stays in Cloudinary, because the backend doesn't know about it. It only costs storage.
-- The signature fixes the folder and formats but not the file size. The frontend should check size before uploading, and Cloudinary's plan limit still applies.
+- Cloudinary can't limit file size at upload time, because neither a signature nor an upload preset supports it. So an oversized file is stored until the product save rejects and deletes it, and a file uploaded but never saved still stays, as before. Cloudinary's own plan limit is the hard upper bound.
+- Removing an image from one product while another product adds the same image at the same moment can still delete it. The edit checks that no other product uses the image, then deletes it in the background, and a save that lands in between isn't seen. This needs two admins editing a shared image within milliseconds. If the shop gets several admins, delete removed images after a delay, checking again first.
 - Password reset and 2FA codes both go to the same inbox, so someone who controls that email can pass both. Authenticator apps would be stronger.
 - Logging out ends the user's sessions on every device.
 - Password reset links are logged by the frontend's server if it logs URLs, and the reset page should send no referrer.

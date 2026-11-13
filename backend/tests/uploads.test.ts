@@ -16,6 +16,15 @@ let destroyMock: {
   mock: { restore: () => void; mockImplementationOnce: (f: () => Promise<void>) => void };
 };
 let count = 0;
+// What the fake Cloudinary reports for each image. Unlisted images are small JPGs.
+const MAX_BYTES = 5 * 1024 * 1024;
+let stored = new Map<string, { bytes: number; format: string } | null>();
+let checked: string[] = [];
+let getImageMock: { mock: { restore: () => void } };
+const fakeGetImage = async (publicId: string) => {
+  checked.push(publicId);
+  return stored.has(publicId) ? stored.get(publicId)! : { bytes: 100_000, format: "jpg" };
+};
 
 const image = (name: string) => ({
   url: `https://res.cloudinary.com/${CLOUD}/image/upload/v1700000000/products/${name}.jpg`,
@@ -51,6 +60,7 @@ before(async () => {
   destroyMock = mock.method(cloudinary, "destroy", async (publicId: string) => {
     destroyed.push(publicId);
   }) as never;
+  getImageMock = mock.method(cloudinary, "getImage", fakeGetImage) as never;
 
   admin = new t.Client();
   await admin.register("admin@shop.test");
@@ -60,9 +70,12 @@ before(async () => {
 });
 beforeEach(() => {
   destroyed = [];
+  stored = new Map();
+  checked = [];
 });
 after(async () => {
   destroyMock.mock.restore();
+  getImageMock.mock.restore();
   await t.stop();
 });
 
@@ -213,4 +226,177 @@ test("a failed delete doesn't fail the product edit", async () => {
   const res = await patchImages(body.data.product._id, []);
   assert.equal(res.status, 200);
   assert.deepEqual(res.body.data.product.images, []);
+});
+
+test("the signature tells the browser the size limit and allowed types", async () => {
+  const { data } = (await admin.post("/admin/uploads/signature")).body;
+  assert.equal(data.maxFileBytes, MAX_BYTES);
+  assert.deepEqual(data.allowedMimeTypes, ["image/jpeg", "image/png", "image/webp"]);
+});
+
+test("an image at the size limit is accepted, and one byte over is rejected and deleted", async () => {
+  stored.set("products/at-limit", { bytes: MAX_BYTES, format: "jpg" });
+  stored.set("products/too-big", { bytes: MAX_BYTES + 1, format: "png" });
+
+  assert.equal((await createProduct([image("at-limit")])).status, 201);
+  const res = await createProduct([image("too-big")]);
+  assert.equal(res.status, 400);
+  assert.match(res.body.error.details.images[0], /5 MB/);
+  await settle();
+  assert.deepEqual(destroyed, ["products/too-big"]);
+});
+
+test("an image Cloudinary stored in another format is rejected and deleted", async () => {
+  stored.set("products/animated", { bytes: 1000, format: "gif" });
+  const res = await createProduct([image("animated")]);
+  assert.equal(res.status, 400);
+  assert.match(res.body.error.details.images[0], /JPG, PNG or WebP/);
+  await settle();
+  assert.deepEqual(destroyed, ["products/animated"]);
+});
+
+test("an image that isn't in Cloudinary is rejected", async () => {
+  stored.set("products/missing", null);
+  const res = await createProduct([image("missing")]);
+  assert.equal(res.status, 400);
+  assert.match(res.body.error.details.images[0], /not found/);
+});
+
+test("an edit adding an oversized image is rejected and keeps the old images", async () => {
+  const { body } = await createProduct([image("old")]);
+  stored.set("products/huge", { bytes: MAX_BYTES * 2, format: "jpg" });
+  const res = await patchImages(body.data.product._id, [image("huge")]);
+  assert.equal(res.status, 400);
+  const detail = await admin.get(`/admin/products/${body.data.product._id}`);
+  assert.deepEqual(
+    detail.body.data.product.images.map((i: { publicId: string }) => i.publicId),
+    ["products/old"]
+  );
+  await settle();
+  assert.deepEqual(destroyed, ["products/huge"]);
+});
+
+test("images already on a product aren't checked again", async () => {
+  const { body } = await createProduct([image("checked-once")]);
+  checked = [];
+  await patchImages(body.data.product._id, [image("checked-once")]);
+  await createProduct([image("checked-once")]);
+  assert.deepEqual(checked, []);
+});
+
+test("saving fails safely with a 503 when Cloudinary can't be reached", async () => {
+  getImageMock.mock.restore();
+  getImageMock = mock.method(cloudinary, "getImage", async () => {
+    throw new Error("timeout");
+  }) as never;
+  try {
+    const res = await createProduct([image("unreachable")]);
+    assert.equal(res.status, 503);
+    assert.equal(res.body.error.code, "IMAGE_CHECK_UNAVAILABLE");
+  } finally {
+    getImageMock.mock.restore();
+    getImageMock = mock.method(cloudinary, "getImage", fakeGetImage) as never;
+  }
+  await settle();
+  assert.deepEqual(destroyed, []);
+});
+
+test("a rejected save never deletes an image another product already uses", async () => {
+  // An image attached before the size check existed, now reported as oversized.
+  await createProduct([image("legacy")]);
+  stored.set("products/legacy", { bytes: MAX_BYTES * 3, format: "jpg" });
+  stored.set("products/new-huge", { bytes: MAX_BYTES + 1, format: "jpg" });
+  checked = [];
+
+  const res = await createProduct([image("legacy"), image("new-huge")]);
+  assert.equal(res.status, 400);
+  await settle();
+  assert.deepEqual(destroyed, ["products/new-huge"]);
+  assert.ok(!checked.includes("products/legacy"), "an image in use isn't checked again");
+});
+
+test("an edit fails with a 503 and keeps the old images when Cloudinary can't be reached", async () => {
+  const { body } = await createProduct([image("before-outage")]);
+  getImageMock.mock.restore();
+  getImageMock = mock.method(cloudinary, "getImage", async () => {
+    throw new Error("timeout");
+  }) as never;
+  try {
+    const res = await patchImages(body.data.product._id, [image("during-outage")]);
+    assert.equal(res.status, 503);
+  } finally {
+    getImageMock.mock.restore();
+    getImageMock = mock.method(cloudinary, "getImage", fakeGetImage) as never;
+  }
+  const detail = await admin.get(`/admin/products/${body.data.product._id}`);
+  assert.deepEqual(
+    detail.body.data.product.images.map((i: { publicId: string }) => i.publicId),
+    ["products/before-outage"]
+  );
+  await settle();
+  assert.deepEqual(destroyed, []);
+});
+
+test("image checks use the Admin API with Basic auth, and a 404 means not found", async () => {
+  getImageMock.mock.restore();
+  const sent: { url: string; auth: string | null }[] = [];
+  const fetchMock = mock.method(globalThis, "fetch", async (url: string, init: RequestInit) => {
+    sent.push({ url, auth: new Headers(init.headers).get("authorization") });
+    return url.endsWith("/gone")
+      ? new Response(JSON.stringify({ error: { message: "Resource not found" } }), { status: 404 })
+      : new Response(JSON.stringify({ bytes: 1234, format: "webp", public_id: "products/abc" }));
+  });
+  try {
+    assert.deepEqual(await cloudinary.getImage("products/abc"), { bytes: 1234, format: "webp" });
+    assert.equal(await cloudinary.getImage("products/gone"), null);
+  } finally {
+    fetchMock.mock.restore();
+    getImageMock = mock.method(cloudinary, "getImage", fakeGetImage) as never;
+  }
+  assert.equal(
+    sent[0]?.url,
+    `https://api.cloudinary.com/v1_1/${CLOUD}/resources/image/upload/products/abc`
+  );
+  const basic = `Basic ${Buffer.from(`${API_KEY}:${SECRET}`).toString("base64")}`;
+  assert.equal(sent[0]?.auth, basic);
+});
+
+test("editing a product that doesn't exist returns 404 without checking or deleting images", async () => {
+  stored.set("products/orphan", { bytes: MAX_BYTES * 2, format: "jpg" });
+  const res = await patchImages("507f1f77bcf86cd799439011", [image("orphan")]);
+  assert.equal(res.status, 404);
+  await settle();
+  assert.deepEqual(checked, []);
+  assert.deepEqual(destroyed, []);
+});
+
+test("a malformed Cloudinary image record fails closed with a 503 and deletes nothing", async () => {
+  const malformed = [
+    { format: "jpg" }, // bytes missing
+    { bytes: "12", format: "jpg" }, // bytes not a number
+    { bytes: 1000 }, // format missing
+    { bytes: 1000, format: 7 }, // format not a string
+  ];
+  getImageMock.mock.restore();
+  const realFetch = globalThis.fetch;
+  let record: unknown;
+  // Only the Admin API is faked. The test client's own requests still reach the app.
+  const fetchMock = mock.method(globalThis, "fetch", (url: string, init?: RequestInit) =>
+    String(url).startsWith("https://api.cloudinary.com/")
+      ? Promise.resolve(new Response(JSON.stringify(record)))
+      : realFetch(url, init)
+  );
+  try {
+    for (const [i, body] of malformed.entries()) {
+      record = body;
+      const res = await createProduct([image(`malformed-${i}`)]);
+      assert.equal(res.status, 503, JSON.stringify(body));
+      assert.equal(res.body.error.code, "IMAGE_CHECK_UNAVAILABLE");
+    }
+  } finally {
+    fetchMock.mock.restore();
+    getImageMock = mock.method(cloudinary, "getImage", fakeGetImage) as never;
+  }
+  await settle();
+  assert.deepEqual(destroyed, []);
 });

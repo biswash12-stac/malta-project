@@ -6,7 +6,7 @@
  */
 import "dotenv/config";
 
-import { cleanEnv, str, port, url, makeValidator } from "envalid";
+import { cleanEnv, str, port, url, num, makeValidator } from "envalid";
 
 // Custom validator: only accepts mongodb:// or mongodb+srv:// URLs
 const mongoUri = makeValidator<string>((input) => {
@@ -68,6 +68,8 @@ export const env = cleanEnv(process.env, {
   CLOUDINARY_CLOUD_NAME: str({ devDefault: "" }),
   CLOUDINARY_API_KEY: str({ devDefault: "" }),
   CLOUDINARY_API_SECRET: str({ devDefault: "" }),
+  // Largest product image accepted, in bytes. 5 MB fits a typical phone photo.
+  UPLOAD_MAX_BYTES: num({ default: 5 * 1024 * 1024 }),
 
   // How many proxies sit in front of the API. Too high lets clients fake their IP and dodge
   // rate limits; too low puts all users under one limit. Required in production.
