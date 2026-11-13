@@ -6,12 +6,14 @@ import { objectIdParamSchema } from "../../utils/common.schema.js";
 import {
   getAdminHandler,
   listAdminHandler,
+  statsHandler,
   updateDeliveryDateHandler,
   updatePaymentHandler,
   updateStatusHandler,
 } from "./order.controller.js";
 import {
   adminOrderQuerySchema,
+  adminStatsQuerySchema,
   updateDeliveryDateSchema,
   updatePaymentSchema,
   updateStatusSchema,
@@ -37,4 +39,14 @@ adminOrderRoutes.patch(
   "/:id/payment",
   validateRequest({ params: objectIdParamSchema, body: updatePaymentSchema }),
   updatePaymentHandler
+);
+
+export const adminStatsRoutes = Router();
+
+adminStatsRoutes.get(
+  "/",
+  requireAuth,
+  requireRole("admin"),
+  validateRequest({ query: adminStatsQuerySchema }),
+  statsHandler
 );

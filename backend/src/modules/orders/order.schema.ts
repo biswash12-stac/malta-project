@@ -68,3 +68,6 @@ export const updatePaymentSchema = z.strictObject({
 export type PlaceOrderInput = z.infer<typeof placeOrderSchema>;
 export type AdminOrderQuery = z.infer<typeof adminOrderQuerySchema>;
 export type UpdateStatusInput = z.infer<typeof updateStatusSchema>;
+
+// Takes no params, so any query string returns a 400.
+export const adminStatsQuerySchema = z.strictObject({});

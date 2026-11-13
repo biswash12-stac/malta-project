@@ -16,6 +16,7 @@ let ProductModel: typeof import("../src/modules/products/product.model.js").Prod
 let OrderModel: typeof import("../src/modules/orders/order.model.js").OrderModel;
 let CategoryModel: typeof import("../src/modules/categories/category.model.js").CategoryModel;
 let nextOrderNumber: typeof import("../src/modules/orders/order-number.js").nextOrderNumber;
+let startOfMaltaDay: typeof import("../src/modules/orders/order-number.js").startOfMaltaDay;
 
 let nextIp = 1;
 let productCount = 0;
@@ -113,7 +114,7 @@ before(async () => {
   ({ CategoryModel } = await import("../src/modules/categories/category.model.js"));
   ({ ProductModel } = await import("../src/modules/products/product.model.js"));
   ({ OrderModel } = await import("../src/modules/orders/order.model.js"));
-  ({ nextOrderNumber } = await import("../src/modules/orders/order-number.js"));
+  ({ nextOrderNumber, startOfMaltaDay } = await import("../src/modules/orders/order-number.js"));
   await connectDB();
 
   await new Promise<void>((resolve) => {
@@ -146,6 +147,7 @@ test("ordering needs a login, and admin routes need an admin", async () => {
     ["PATCH", `/admin/orders/${id}/status`, { status: "confirmed" }],
     ["PATCH", `/admin/orders/${id}/delivery-date`, { estimatedDeliveryDate: null }],
     ["PATCH", `/admin/orders/${id}/payment`, { paymentStatus: "paid" }],
+    ["GET", "/admin/stats", undefined],
   ] as const;
   for (const [method, path, body] of routes) {
     assert.equal((await api(method, path, { body })).status, 401, path);
@@ -533,4 +535,66 @@ test("placing orders is rate limited, but rejected attempts don't count", async 
   const blocked = await order();
   assert.equal(blocked.status, 429);
   assert.equal(await stockOf(product._id), 10);
+});
+
+test("Malta's day starts at local midnight, including on clock-change days", () => {
+  const cases = [
+    // 23:30 UTC on 13 November is 00:30 on the 14th in Malta (UTC+1).
+    ["2026-11-13T23:30:00Z", "2026-11-13T23:00:00.000Z"],
+    // Clocks go forward at 01:00 UTC on 29 March 2026, so midnight was still UTC+1.
+    ["2026-03-29T12:00:00Z", "2026-03-28T23:00:00.000Z"],
+    // Clocks go back at 01:00 UTC on 25 October 2026, so midnight was still UTC+2.
+    ["2026-10-25T12:00:00Z", "2026-10-24T22:00:00.000Z"],
+  ] as const;
+  for (const [now, start] of cases) {
+    assert.equal(startOfMaltaDay(new Date(now)).toISOString(), start, now);
+  }
+});
+
+test("admin stats sum revenue, count today's orders and count pending ones", async () => {
+  await OrderModel.deleteMany({});
+  await placeOne(); // pending, placed today
+  const deliveredPaid = (await placeOne()).order;
+  await advanceTo(deliveredPaid._id, "confirmed", "packed", "out_for_delivery", "delivered");
+  assert.equal(
+    (
+      await asAdmin("PATCH", `/admin/orders/${deliveredPaid._id}/payment`, {
+        paymentStatus: "paid",
+      })
+    ).status,
+    200
+  );
+  const deliveredUnpaid = (await placeOne()).order;
+  await advanceTo(deliveredUnpaid._id, "confirmed", "packed", "out_for_delivery", "delivered");
+  const cancelled = (await placeOne()).order;
+  await setStatus(cancelled._id, "cancelled");
+  // Not reachable through the API today, but the rule counts paid orders too.
+  const paidNotDelivered = (await placeOne()).order;
+  await OrderModel.collection.updateOne(
+    { _id: new mongoose.Types.ObjectId(paidNotDelivered._id) },
+    { $set: { status: "confirmed", paymentStatus: "paid" } }
+  );
+  // Pending, but placed one minute before Malta's midnight.
+  const pendingYesterday = (await placeOne()).order;
+  await OrderModel.collection.updateOne(
+    { _id: new mongoose.Types.ObjectId(pendingYesterday._id) },
+    { $set: { createdAt: new Date(startOfMaltaDay().getTime() - 60_000) } }
+  );
+
+  const res = await asAdmin("GET", "/admin/stats");
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.deepEqual(res.body.data, {
+    totalRevenue: deliveredPaid.total + deliveredUnpaid.total + paidNotDelivered.total,
+    ordersToday: 5,
+    pendingOrders: 2,
+  });
+
+  assert.equal((await asAdmin("GET", "/admin/stats?status=pending")).status, 400);
+});
+
+test("admin stats are zero when there are no orders", async () => {
+  await OrderModel.deleteMany({});
+  const res = await asAdmin("GET", "/admin/stats");
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.body.data, { totalRevenue: 0, ordersToday: 0, pendingOrders: 0 });
 });

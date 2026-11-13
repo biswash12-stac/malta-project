@@ -5,7 +5,7 @@ import { pageOf, skipFor } from "../../utils/pagination.js";
 import { paymentProviders } from "../payments/payment.registry.js";
 import { ProductModel } from "../products/product.model.js";
 import { notInHiddenCategory } from "../products/product.service.js";
-import { nextOrderNumber } from "./order-number.js";
+import { nextOrderNumber, startOfMaltaDay } from "./order-number.js";
 import { OrderModel, type Order, type OrderHistoryEntry } from "./order.model.js";
 import { normalizePhone, type AdminOrderQuery, type PlaceOrderInput } from "./order.schema.js";
 import { canTransition, isFinalStatus, type OrderStatus } from "./order.status.js";
@@ -226,4 +226,17 @@ export const markOrderPaid = async (adminId: string, id: string) => {
   logChange(order, adminId, "Cash collected");
   await order.save();
   return getAdminOrder(id);
+};
+
+// FR-18. Totals are integer cents, and "today" follows Malta's calendar.
+export const getAdminStats = async () => {
+  const [revenue, ordersToday, pendingOrders] = await Promise.all([
+    OrderModel.aggregate<{ total: number }>([
+      { $match: { $or: [{ status: "delivered" }, { paymentStatus: "paid" }] } },
+      { $group: { _id: null, total: { $sum: "$total" } } },
+    ]),
+    OrderModel.countDocuments({ createdAt: { $gte: startOfMaltaDay() } }),
+    OrderModel.countDocuments({ status: "pending" }),
+  ]);
+  return { totalRevenue: revenue[0]?.total ?? 0, ordersToday, pendingOrders };
 };

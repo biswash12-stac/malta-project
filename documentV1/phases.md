@@ -58,6 +58,6 @@ Roughly 4–6 weeks part-time. Adjust around your semester schedule.
 | 3 Catalog | Completed | 2026-11-06 | 2026-11-06 |
 | 4 Orders | Completed | 2026-11-07 | 2026-11-07 |
 | 5 Public frontend | In Progress | | |
-| 6 Admin dashboard | In Progress | | |
+| 6 Admin dashboard | In Progress | 2026-11-13 | |
 | 7 Testing | | | |
 | 8 Deployment | | | |
