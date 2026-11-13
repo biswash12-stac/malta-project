@@ -60,5 +60,16 @@ Define a `PaymentProvider` interface: `createPayment(order)`, `verifyPayment(pay
 - Set `NODE_ENV=production`, `CLIENT_URL`, `COOKIE_DOMAIN` and `TRUST_PROXY_HOPS` on the backend host.
 - `TRUST_PROXY_HOPS` is the number of proxies in front of the API, and the server won't start in production without it. Check the chosen host's documentation: too high lets clients fake their IP and dodge rate limits, and too low puts all users under one limit.
 
+### Production security checklist (added 2026-11-13)
+- Product images: the backend checks each new image with Cloudinary before a product can use it: 5 MB at most (`UPLOAD_MAX_BYTES`), and a stored format of JPG, PNG or WebP. Rejected files are deleted. The upload signature also gives the browser the limit, so it can refuse a file before uploading.
+- Frontend: send a Content-Security-Policy and the other security headers (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`) from `next.config.ts`. Next.js needs inline scripts unless pages render per request with a nonce, so the policy allows `'unsafe-inline'` scripts but limits scripts, images, connections and framing to known origins. Check it in the browser before launch.
+- CI: `.github/workflows/ci.yml` runs the backend type check, both test suites, and the frontend lint and build on every PR and on every push to `main`. It needs no secrets.
+- MongoDB Atlas, set up by the developer in the Atlas console:
+  - [ ] A production database user just for the API, not the development user. Built-in role `readWrite` on the production database only, never `atlasAdmin` or `readWriteAnyDatabase`. A long random password.
+  - [ ] Network access: only the API host's outgoing IP addresses. If the host has no fixed IP, `0.0.0.0/0` is the usual compromise, and it makes the strong password and rotation essential.
+  - [ ] Backups: the free M0 tier has no automated backups. Use a paid tier with Cloud Backup, or a scheduled `mongodump` to separate storage. Test a restore before launch, and then every few months.
+  - [ ] Connection string: a `mongodb+srv://` address with the database name, set only as an environment variable on the host. Rotate the password when anyone with access leaves, or if it may have leaked. The app already hides it in logs.
+  - [ ] Monitoring: turn on Atlas alerts for connections and unusual activity, require 2FA for Atlas accounts, and keep the project member list short.
+
 ## 9. Backend File Structure
 See `backend-structure.md`.

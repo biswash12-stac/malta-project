@@ -4,7 +4,7 @@ import type { PaginationQuery } from "../../utils/common.schema.js";
 import { pageOf, skipFor } from "../../utils/pagination.js";
 import { slugify } from "../../utils/slugify.js";
 import { CategoryModel } from "../categories/category.model.js";
-import { deleteImagesInBackground } from "../uploads/upload.service.js";
+import { assertImagesAllowed, deleteImagesInBackground } from "../uploads/upload.service.js";
 import { ProductModel, type Product } from "./product.model.js";
 import { applyPriceRules } from "./product.pricing.js";
 import type {
@@ -108,8 +108,19 @@ const assertCategoryExists = async (id: string) => {
   }
 };
 
+// Images no product uses yet, so each file is checked once and a rejected one can be deleted.
+const assertNewImagesAllowed = async (images: { publicId: string }[] | undefined) => {
+  const publicIds = (images ?? []).map((image) => image.publicId);
+  if (publicIds.length === 0) return;
+  const inUse = new Set<string>(
+    await ProductModel.distinct("images.publicId", { "images.publicId": { $in: publicIds } })
+  );
+  await assertImagesAllowed(publicIds.filter((publicId) => !inUse.has(publicId)));
+};
+
 export const createProduct = async (input: CreateProductInput) => {
   await assertCategoryExists(input.category);
+  await assertNewImagesAllowed(input.images);
 
   const product = new ProductModel({ ...input, slug: slugify(input.nameEn) });
   applyPriceRules(product, null);
@@ -128,6 +139,8 @@ export const updateProduct = async (id: string, input: UpdateProductInput) => {
 
   const product = await ProductModel.findById(id).select("+priceHistory");
   if (!product) throw AppError.notFound("Product not found");
+  // After the 404 check, so editing a missing product never calls Cloudinary or deletes an upload.
+  await assertNewImagesAllowed(input.images);
 
   const previousPrice = product.offerPrice ?? product.price;
   const previousImages = product.images.map((image) => image.publicId);
