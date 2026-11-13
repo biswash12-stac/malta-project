@@ -15,6 +15,7 @@ let categoryId: string;
 let ProductModel: typeof import("../src/modules/products/product.model.js").ProductModel;
 let OrderModel: typeof import("../src/modules/orders/order.model.js").OrderModel;
 let CategoryModel: typeof import("../src/modules/categories/category.model.js").CategoryModel;
+let IdempotencyKeyModel: typeof import("../src/modules/orders/idempotency-key.model.js").IdempotencyKeyModel;
 let nextOrderNumber: typeof import("../src/modules/orders/order-number.js").nextOrderNumber;
 let startOfMaltaDay: typeof import("../src/modules/orders/order-number.js").startOfMaltaDay;
 
@@ -31,7 +32,12 @@ const delivery = {
 const api = async (
   method: string,
   path: string,
-  { body, cookie, ip }: { body?: unknown; cookie?: string; ip?: string } = {}
+  {
+    body,
+    cookie,
+    ip,
+    headers,
+  }: { body?: unknown; cookie?: string; ip?: string; headers?: Record<string, string> } = {}
 ): Promise<{ status: number; body: any; setCookies: string[] }> => {
   const res = await fetch(`${base}/api/v1${path}`, {
     method,
@@ -40,6 +46,7 @@ const api = async (
       "x-forwarded-for": ip ?? `10.${(nextIp >> 8) & 255}.${nextIp++ & 255}.1`,
       ...(body !== undefined && { "content-type": "application/json" }),
       ...(cookie && { cookie }),
+      ...headers,
     },
     ...(body !== undefined && { body: JSON.stringify(body) }),
   });
@@ -114,6 +121,7 @@ before(async () => {
   ({ CategoryModel } = await import("../src/modules/categories/category.model.js"));
   ({ ProductModel } = await import("../src/modules/products/product.model.js"));
   ({ OrderModel } = await import("../src/modules/orders/order.model.js"));
+  ({ IdempotencyKeyModel } = await import("../src/modules/orders/idempotency-key.model.js"));
   ({ nextOrderNumber, startOfMaltaDay } = await import("../src/modules/orders/order-number.js"));
   await connectDB();
 
@@ -597,4 +605,71 @@ test("admin stats are zero when there are no orders", async () => {
   const res = await asAdmin("GET", "/admin/stats");
   assert.equal(res.status, 200);
   assert.deepEqual(res.body.data, { totalRevenue: 0, ordersToday: 0, pendingOrders: 0 });
+});
+
+const placeWithKey = (product: { _id: unknown }, key: string, cookie = customerCookie, qty = 2) =>
+  api("POST", "/orders", {
+    body: { items: [{ productId: String(product._id), qty }], delivery },
+    cookie,
+    headers: { "idempotency-key": key },
+  });
+
+test("repeating a request with the same Idempotency-Key returns the first order", async () => {
+  const product = await makeProduct();
+  const first = await placeWithKey(product, "key-repeat");
+  const second = await placeWithKey(product, "key-repeat");
+
+  assert.equal(first.status, 201, JSON.stringify(first.body));
+  assert.equal(second.status, 201, JSON.stringify(second.body));
+  assert.deepEqual(second.body, first.body);
+  assert.equal(await OrderModel.countDocuments({ "items.productId": product._id }), 1);
+  assert.equal(await stockOf(product._id), 3);
+});
+
+test("parallel requests with the same Idempotency-Key create one order", async () => {
+  const product = await makeProduct();
+  const results = await Promise.all(
+    Array.from({ length: 5 }, () => placeWithKey(product, "key-parallel"))
+  );
+
+  for (const res of results) assert.equal(res.status, 201, JSON.stringify(res.body));
+  const ids = new Set(results.map((res) => res.body.data.order._id));
+  assert.equal(ids.size, 1);
+  assert.equal(await OrderModel.countDocuments({ "items.productId": product._id }), 1);
+  assert.equal(await stockOf(product._id), 3);
+});
+
+test("an Idempotency-Key belongs to one user and one cart", async () => {
+  const product = await makeProduct({ stock: 10 });
+  const mine = await placeWithKey(product, "key-shared");
+  const theirs = await placeWithKey(product, "key-shared", otherCookie);
+  assert.equal(theirs.status, 201);
+  assert.notEqual(theirs.body.data.order._id, mine.body.data.order._id);
+
+  const otherCart = await placeWithKey(product, "key-shared", customerCookie, 3);
+  assert.equal(otherCart.status, 422);
+  assert.equal(otherCart.body.error.code, "IDEMPOTENCY_KEY_REUSED");
+  assert.equal(await stockOf(product._id), 6);
+});
+
+test("a failed checkout doesn't use up its Idempotency-Key", async () => {
+  const product = await makeProduct({ price: 100, stock: 50 });
+  assert.equal((await placeWithKey(product, "key-retry", customerCookie, 1)).status, 400);
+  assert.equal((await placeWithKey(product, "key-retry", customerCookie, 20)).status, 201);
+});
+
+test("a malformed Idempotency-Key returns a 400 and creates no order", async () => {
+  const product = await makeProduct();
+  for (const key of ["", "has space", "x".repeat(256)]) {
+    const res = await placeWithKey(product, key);
+    assert.equal(res.status, 400, JSON.stringify(key));
+  }
+  assert.equal(await stockOf(product._id), 5);
+});
+
+test("Idempotency-Keys expire after 24 hours", async () => {
+  const indexes = await IdempotencyKeyModel.collection.indexes();
+  const ttl = indexes.find((index) => index.expireAfterSeconds !== undefined);
+  assert.deepEqual(ttl?.key, { createdAt: 1 });
+  assert.equal(ttl?.expireAfterSeconds, 24 * 60 * 60);
 });

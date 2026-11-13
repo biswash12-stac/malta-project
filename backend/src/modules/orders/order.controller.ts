@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { sendSuccess } from "../../utils/api-response.js";
 import { AppError } from "../../utils/app-error.js";
 import type { PaginationQuery } from "../../utils/common.schema.js";
-import type { AdminOrderQuery } from "./order.schema.js";
+import { idempotencyKeySchema, type AdminOrderQuery } from "./order.schema.js";
 import {
   getAdminOrder,
   getAdminStats,
@@ -21,7 +21,9 @@ const currentUserId = (req: Request<any>) => {
 };
 
 export const placeHandler = async (req: Request, res: Response) => {
-  sendSuccess(res, { order: await placeOrder(currentUserId(req), req.body) }, 201);
+  const idempotencyKey = idempotencyKeySchema.parse(req.get("Idempotency-Key"));
+  const order = await placeOrder(currentUserId(req), req.body, idempotencyKey);
+  sendSuccess(res, { order }, 201);
 };
 
 export const listMineHandler = async (req: Request, res: Response) => {

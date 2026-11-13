@@ -71,3 +71,9 @@ export type UpdateStatusInput = z.infer<typeof updateStatusSchema>;
 
 // Takes no params, so any query string returns a 400.
 export const adminStatsQuerySchema = z.strictObject({});
+
+// Optional Idempotency-Key header on checkout: printable ASCII with no spaces, such as a UUID.
+export const idempotencyKeySchema = z
+  .string()
+  .regex(/^[!-~]{1,255}$/, "Must be 1 to 255 printable characters with no spaces")
+  .optional();

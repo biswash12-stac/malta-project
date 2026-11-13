@@ -58,11 +58,13 @@ export const orderRateLimit = rateLimit({
   skipFailedRequests: true,
 });
 
+// Load balancers and uptime monitors call these every few seconds, so they're never limited or logged.
+export const HEALTH_PATHS = ["/api/v1/health", "/api/v1/health/ready"];
+
 // shortcut: Next.js server rendering sends catalog requests from one server IP, raise this limit if real traffic reaches it.
 export const generalRateLimit = rateLimit({
   ...limitOptions,
   windowMs: 60 * 1000,
   limit: 300,
-  // Uptime monitors and the host's health checks must keep working.
-  skip: (req) => req.path === "/api/v1/health",
+  skip: (req) => HEALTH_PATHS.includes(req.path),
 });

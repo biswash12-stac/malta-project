@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import mongoose, { Types, type HydratedDocument, type QueryFilter } from "mongoose";
 import { AppError } from "../../utils/app-error.js";
 import type { PaginationQuery } from "../../utils/common.schema.js";
@@ -5,6 +6,7 @@ import { pageOf, skipFor } from "../../utils/pagination.js";
 import { paymentProviders } from "../payments/payment.registry.js";
 import { ProductModel } from "../products/product.model.js";
 import { notInHiddenCategory } from "../products/product.service.js";
+import { IdempotencyKeyModel } from "./idempotency-key.model.js";
 import { nextOrderNumber, startOfMaltaDay } from "./order-number.js";
 import { OrderModel, type Order, type OrderHistoryEntry } from "./order.model.js";
 import { normalizePhone, type AdminOrderQuery, type PlaceOrderInput } from "./order.schema.js";
@@ -22,10 +24,65 @@ const ADMIN_LIST_FIELDS = `${CUSTOMER_LIST_FIELDS} delivery.name delivery.phone 
 const itemsUnavailable = (items: { productId: string; available: number }[]) =>
   new AppError(409, "ITEMS_UNAVAILABLE", "Some items are no longer available", { items });
 
-export const placeOrder = async (userId: string, { items, delivery }: PlaceOrderInput) => {
+// The order an earlier checkout with this key placed, or null if the key is new.
+const replayOrder = async (userId: string, key: string, requestHash: string) => {
+  const saved = await IdempotencyKeyModel.findOne({ user: userId, key })
+    .select("requestHash order")
+    .lean();
+  if (!saved) return null;
+  if (saved.requestHash !== requestHash) {
+    throw new AppError(
+      422,
+      "IDEMPOTENCY_KEY_REUSED",
+      "This Idempotency-Key was already used for a different order"
+    );
+  }
+  return getMyOrder(userId, String(saved.order));
+};
+
+const isDuplicateKeyError = (err: unknown) => (err as { code?: unknown } | null)?.code === 11000;
+
+export const placeOrder = async (
+  userId: string,
+  input: PlaceOrderInput,
+  idempotencyKey?: string
+) => {
+  const requestHash = createHash("sha256").update(JSON.stringify(input)).digest("hex");
+  if (idempotencyKey) {
+    const previous = await replayOrder(userId, idempotencyKey, requestHash);
+    if (previous) return previous;
+  }
+
+  try {
+    return await createOrder(userId, input, idempotencyKey, requestHash);
+  } catch (err) {
+    // A parallel request with the same key committed first, and this one rolled back.
+    if (idempotencyKey && isDuplicateKeyError(err)) {
+      const previous = await replayOrder(userId, idempotencyKey, requestHash);
+      if (previous) return previous;
+    }
+    throw err;
+  }
+};
+
+const createOrder = async (
+  userId: string,
+  { items, delivery }: PlaceOrderInput,
+  idempotencyKey: string | undefined,
+  requestHash: string
+) => {
   const visible = await notInHiddenCategory();
+  const orderId = new Types.ObjectId();
 
   const order = await mongoose.connection.transaction(async (session) => {
+    // First, so a parallel request with the same key fails before it touches any stock.
+    if (idempotencyKey) {
+      await IdempotencyKeyModel.create(
+        [{ user: userId, key: idempotencyKey, requestHash, order: orderId }],
+        { session }
+      );
+    }
+
     const products = await ProductModel.find({
       _id: { $in: items.map(({ productId }) => productId) },
       isActive: true,
@@ -78,6 +135,7 @@ export const placeOrder = async (userId: string, { items, delivery }: PlaceOrder
 
     const by = new Types.ObjectId(userId);
     const created = new OrderModel({
+      _id: orderId,
       orderNumber: await nextOrderNumber(),
       user: by,
       items: lines,

@@ -29,7 +29,8 @@ The security audit's code fixes are done. Finding 9 (production secrets) is a la
 - MongoDB connection, with a clean shutdown when the server stops. The server won't start if an index can't be built
 - Environment checks at startup: the server won't start if a required value is missing or invalid
 - One error handler for the whole API, using the standard error format
-- Health check at `GET /api/v1/health`
+- Health check at `GET /api/v1/health`, and a readiness check at `GET /api/v1/health/ready` that returns 503 when MongoDB doesn't answer a ping. Neither is rate limited or logged
+- Every response carries an `X-API-Version: 1.0.0` header, including errors and 404s
 
 ### Auth
 - User model with `username`, `email` (unique), optional `passwordHash`, `role`, `tokenVersion`, Google, password reset and 2FA fields, and `createdAt`
@@ -81,6 +82,8 @@ The security audit's code fixes are done. Finding 9 (production secrets) is a la
 - Admin list filters by status and date, and finds an exact order number or phone number. Malta numbers are stored without `+356`
 - A delivered order can be marked paid once. COD goes through a `PaymentProvider`, so digital payment can be added later
 - 10 placed orders per 15 minutes per IP address. Rejected attempts don't count
+- Optional `Idempotency-Key` header on checkout (1 to 255 printable characters, no spaces). Repeating a request with the same key returns the first order instead of placing another, even when the requests arrive at the same time
+- The key is saved in the checkout transaction, so it exists only if its order does. A failed checkout leaves the key free to retry. Keys are per user, reusing one for a different cart returns a 422 `IDEMPOTENCY_KEY_REUSED`, and MongoDB deletes them after 24 hours
 
 ### Admin stats
 - `GET /admin/stats` (admin) returns `totalRevenue`, `ordersToday` and `pendingOrders`
@@ -89,9 +92,9 @@ The security audit's code fixes are done. Finding 9 (production secrets) is a la
 - The three numbers come from three queries run in parallel. Any query param returns a 400
 
 ### Tests and tooling
-- 147 automated tests: `orders` (24), `products` (15), `two-factor` (14), `startup-and-email` (3), `auth` (12), `auth-tokens` (10), `catalog-models` (10), `google` (10), `uploads` (10), `categories` (9), `password-reset` (9), `sessions` (9), `validate` (7) and `hardening` (5). Database tests use a temporary in-memory MongoDB
+- 153 automated tests: `orders` (30), `products` (15), `two-factor` (14), `startup-and-email` (3), `auth` (12), `auth-tokens` (10), `catalog-models` (10), `google` (10), `uploads` (10), `categories` (9), `password-reset` (9), `sessions` (9), `validate` (7) and `hardening` (5). Database tests use a temporary in-memory MongoDB
 - The catalog tests fail if a list query scans the whole collection or sorts in memory
-- Jest and Supertest, run by `npm run test:jest` from `tests/jest/`, with 2 example tests (health check and an empty category list). `npm test` still runs the node:test suite only
+- Jest and Supertest, run by `npm run test:jest` from `tests/jest/`, with 7 tests: health, readiness, the version header, malformed JSON and an empty category list. `npm test` still runs the node:test suite only
 - Jest tests get blank SMTP, Cloudinary and Google values, and a database address that can't connect, before the app loads. Database tests use `startTestDb()` from `tests/jest/helpers/test-db.ts`
 - Prettier formatting
 - Backend README (local only, not on GitHub)
@@ -103,6 +106,7 @@ All routes are under `/api/v1`.
 | Route | Body | Success `data` |
 | --- | --- | --- |
 | `GET /health` | none | `{ status, uptime }` |
+| `GET /health/ready` | none | `{ status: "ready" }`, or 503 `DATABASE_UNAVAILABLE` |
 | `POST /auth/register` | `username`, `email`, `password` (8+ characters) | `{ user }` (201) |
 | `POST /auth/login` | `email`, `password` | `{ user }` or `{ requires2FA: true }` |
 | `POST /auth/google` | `credential` | `{ user }` or `{ requires2FA: true }` |
@@ -129,7 +133,7 @@ All routes are under `/api/v1`.
 | `GET /admin/products?page=&limit=&q=&category=&isActive=` (admin) | none | `{ items, pagination }` |
 | `GET /admin/products/:id` (admin) | none | `{ product }` |
 | `POST /admin/uploads/signature` (admin) | none | `{ uploadUrl, apiKey, timestamp, folder, allowedFormats, signature }` |
-| `POST /orders` (login) | `items[]` of `{ productId, qty }`, `delivery` of `{ name, phone, address, locality, note? }` | `{ order }` (201) |
+| `POST /orders` (login) | `items[]` of `{ productId, qty }`, `delivery` of `{ name, phone, address, locality, note? }`. Optional `Idempotency-Key` header | `{ order }` (201), the same order again for a repeated key |
 | `GET /orders/mine?page=&limit=` (login) | none | `{ items, pagination }` |
 | `GET /orders/:id` (login, own orders only) | none | `{ order }` |
 | `GET /admin/orders?page=&limit=&status=&from=&to=&q=` (admin) | none, `from` and `to` are ISO date-times with an offset | `{ items, pagination }` |
@@ -150,7 +154,8 @@ Error: `{ success: false, error: { code, message, details } }`
 ## Problems Fixed
 
 - The server claimed to be running when its port was already taken. It now stops with an error.
-- Broken JSON and oversized requests returned 500. They now return 400 and 413.
+- Broken JSON and oversized requests returned 500. They now return 400 and 413. Since 2026-11-13 a Jest test also checks the standard error envelope for broken JSON.
+- A double click or network retry on checkout placed two orders. A repeated `Idempotency-Key` now returns the first order.
 - Database validation errors returned 500. They now return 400.
 - `.env.example` was in the wrong folder.
 - Production could silently fall back to a localhost frontend address. `CLIENT_URL` is now required there.
@@ -215,6 +220,8 @@ Error: `{ success: false, error: { code, message, details } }`
 | Jest and Supertest added alongside the node:test suite, not replacing it | The developer's choice. The 147 existing tests keep working, and new tests can use either runner |
 | Jest strips TypeScript with SWC, not ts-jest | ts-jest needs TypeScript below 7 |
 | `test:jest` runs Node with `--experimental-vm-modules` | MongoDB driver 7.8 loads `os` with a dynamic `import()`, which Jest blocks otherwise, so every connection failed |
+| The `Idempotency-Key` is saved inside the checkout transaction, with a unique index on user and key | Checking for the key before creating the order would still let two requests at the same moment both get through. The unique index makes the second one roll back, including its stock change |
+| A repeated key returns the order as it is now, not a stored copy of the first response | A double click gets the same result either way, and a later retry shouldn't show an out-of-date status |
 | The admin list searches exact order numbers and phone numbers | Both use an index and stay fast on large lists |
 | Revenue counts orders that are delivered or paid, and "today" follows Malta's calendar | Developer's rule for FR-18. Under COD only a delivered order can be paid, so today this equals delivered orders. Order numbers already use Malta's date |
 | Stats live in the orders module, mounted at `/admin/stats` | They only read orders, so a separate module would add files without adding anything |
@@ -274,7 +281,9 @@ Error: `{ success: false, error: { code, message, details } }`
 - Next.js server rendering sends catalog requests from one server IP, so a busy store could reach the 300 per minute limit. Watch this after launch.
 - Rate limit counts are kept in the server's memory, so they reset on restart and need a shared store if the API ever runs on more than one server.
 - Checkout needs MongoDB transactions, so it fails on a plain local `mongod`. Atlas and the tests support them.
-- A double submit creates two orders, because there's no server-side duplicate check. The frontend must disable the button while submitting, and the admin can cancel a duplicate.
+- A double submit is only caught when the frontend sends an `Idempotency-Key`: one new UUID per checkout attempt, reused for retries of that attempt. Without the header, two submits still create two orders.
+- Repeated requests with the same key still count toward the 10 orders per 15 minutes limit.
+- The browser can't read `X-API-Version`, because CORS doesn't expose it. Add `exposedHeaders` if the frontend ever needs it.
 - Checkout charges the current price, so a price change after adding to the cart changes the total. The frontend should show the returned total.
 - An admin saving a product's `stock` overwrites the number, so a sale made while the form was open is lost (audit finding 19).
 - The revenue total reads every order, because `paymentStatus` has no index, and the `$or` needs both sides indexed to avoid a full scan. That's fine for a small shop. If the dashboard gets slow, add a `paymentStatus` index or keep a running total.

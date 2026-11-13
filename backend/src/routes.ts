@@ -1,4 +1,5 @@
 import { Router } from "express";
+import mongoose from "mongoose";
 import { authRoutes } from "./modules/auth/auth.routes.js";
 import { adminCategoryRoutes, categoryRoutes } from "./modules/categories/category.routes.js";
 import { adminOrderRoutes, adminStatsRoutes } from "./modules/orders/order.admin.routes.js";
@@ -6,6 +7,7 @@ import { orderRoutes } from "./modules/orders/order.routes.js";
 import { adminProductRoutes, productRoutes } from "./modules/products/product.routes.js";
 import { uploadRoutes } from "./modules/uploads/upload.routes.js";
 import { sendSuccess } from "./utils/api-response.js";
+import { AppError } from "./utils/app-error.js";
 
 export const router = Router();
 
@@ -16,6 +18,22 @@ export const router = Router();
  */
 router.get("/health", (_req, res) => {
   sendSuccess(res, { status: "ok", uptime: process.uptime() });
+});
+
+/**
+ * GET /api/v1/health/ready
+ * Readiness probe: 200 only when MongoDB answers a ping, otherwise 503, so the load balancer
+ * stops sending traffic to an instance that can't reach the database.
+ */
+router.get("/health/ready", async (_req, res) => {
+  const unavailable = new AppError(503, "DATABASE_UNAVAILABLE", "Database is not reachable");
+  const { db, readyState } = mongoose.connection;
+  if (readyState !== mongoose.ConnectionStates.connected || !db) throw unavailable;
+  // Fails within serverSelectionTimeoutMS (5 seconds) if the connection has dropped.
+  await db.command({ ping: 1 }).catch(() => {
+    throw unavailable;
+  });
+  sendSuccess(res, { status: "ready" });
 });
 
 router.use("/auth", authRoutes);

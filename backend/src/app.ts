@@ -8,9 +8,17 @@ import { env } from "./config/env.js";
 import { logger } from "./utils/logger.js";
 import { router } from "./routes.js";
 import { errorHandler, notFoundHandler } from "./middlewares/error.middleware.js";
-import { generalRateLimit } from "./middlewares/rate-limit.middleware.js";
+import { generalRateLimit, HEALTH_PATHS } from "./middlewares/rate-limit.middleware.js";
 
 export const app = express();
+
+export const API_VERSION = "1.0.0";
+
+// First, so every response carries it, including 404s, 429s and errors.
+app.use((_req, res, next) => {
+  res.set("X-API-Version", API_VERSION);
+  next();
+});
 
 // Number of reverse proxies in front of the API (Render, Railway, nginx) — required for correct client IPs,
 // which matters for rate limiting and logs.
@@ -33,7 +41,7 @@ app.use(
   pinoHttp({
     logger,
     autoLogging: {
-      ignore: (req) => req.url === "/api/v1/health",
+      ignore: (req) => HEALTH_PATHS.includes(req.url ?? ""),
     },
     // Don't dump full headers — they can include cookies.
     serializers: {
