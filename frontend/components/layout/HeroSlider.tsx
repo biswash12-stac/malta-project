@@ -1,10 +1,11 @@
 
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { gsap } from "gsap";
 
 const slides = [
   {
@@ -38,16 +39,144 @@ const slides = [
 
 export default function HeroSlider() {
   const sliderRef = useRef<HTMLDivElement>(null);
+
+  const titleRefs = useRef<(HTMLHeadingElement | null)[]>([]);
+  const subtitleRefs = useRef<(HTMLParagraphElement | null)[]>([]);
+  const buttonRefs = useRef<(HTMLAnchorElement | null)[]>([]);
+  const imageRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  const hasEnteredRef = useRef(false);
+
   const [activeSlide, setActiveSlide] = useState(0);
 
+
+  const animateSlide = useCallback((index: number) => {
+    const title = titleRefs.current[index];
+    const subtitle = subtitleRefs.current[index];
+    const button = buttonRefs.current[index];
+    const image = imageRefs.current[index];
+
+    if (!title || !subtitle || !button || !image) return;
+
+    const elements = [title, subtitle, button, image];
+
+    gsap.killTweensOf(elements);
+
+    const tl = gsap.timeline();
+
+    tl.fromTo(
+      title,
+      {
+        y: 45,
+        opacity: 0,
+        filter: "blur(10px)",
+      },
+      {
+        y: 0,
+        opacity: 1,
+        filter: "blur(0px)",
+        duration: 0.85,
+        ease: "power4.out",
+      }
+    );
+
+    tl.fromTo(
+      subtitle,
+      {
+        y: 25,
+        opacity: 0,
+      },
+      {
+        y: 0,
+        opacity: 1,
+        duration: 0.65,
+        ease: "power3.out",
+      },
+      "-=0.5"
+    );
+
+    tl.fromTo(
+      button,
+      {
+        y: 20,
+        opacity: 0,
+        scale: 0.9,
+      },
+      {
+        y: 0,
+        opacity: 1,
+        scale: 1,
+        duration: 0.6,
+        ease: "back.out(1.7)",
+      },
+      "-=0.35"
+    );
+
+    tl.fromTo(
+      image,
+      {
+        x: 70,
+        y: 15,
+        opacity: 0,
+        scale: 0.75,
+        rotation: 8,
+        filter: "blur(12px)",
+      },
+      {
+        x: 0,
+        y: 0,
+        opacity: 1,
+        scale: 1,
+        rotation: 0,
+        filter: "blur(0px)",
+        duration: 1.1,
+        ease: "power4.out",
+      },
+      "-=1.1"
+    );
+  }, []);
+
+ 
+  useEffect(() => {
+    const handleIntroComplete = () => {
+      hasEnteredRef.current = true;
+      animateSlide(activeSlide);
+    };
+
+    window.addEventListener(
+      "bazaar:intro-complete",
+      handleIntroComplete
+    );
+
+   
+    if (sessionStorage.getItem("bazaar-intro-played") === "true") {
+      requestAnimationFrame(handleIntroComplete);
+    }
+
+    return () => {
+      window.removeEventListener(
+        "bazaar:intro-complete",
+        handleIntroComplete
+      );
+    };
+  }, [activeSlide, animateSlide]);
+
+ 
+  useEffect(() => {
+    if (hasEnteredRef.current) {
+      animateSlide(activeSlide);
+    }
+  }, [activeSlide, animateSlide]);
+
+  
   const goToSlide = (index: number) => {
-    const slidesContainer = sliderRef.current;
-    const slide = slidesContainer?.children[index] as HTMLElement;
+    const container = sliderRef.current;
+    const slide = container?.children[index] as HTMLElement | undefined;
 
-    if (!slidesContainer || !slide) return;
+    if (!container || !slide) return;
 
-    slidesContainer.scrollTo({
-      left: slide.offsetLeft - slidesContainer.offsetLeft,
+    container.scrollTo({
+      left: slide.offsetLeft - container.offsetLeft,
       behavior: "smooth",
     });
 
@@ -64,14 +193,14 @@ export default function HeroSlider() {
     );
   };
 
-  
+ 
   useEffect(() => {
     const interval = setInterval(() => {
       setActiveSlide((current) => {
         const next = (current + 1) % slides.length;
 
         const container = sliderRef.current;
-        const slide = container?.children[next] as HTMLElement;
+        const slide = container?.children[next] as HTMLElement | undefined;
 
         if (container && slide) {
           container.scrollTo({
@@ -82,64 +211,78 @@ export default function HeroSlider() {
 
         return next;
       });
-    }, 4000);
+    }, 5000);
 
     return () => clearInterval(interval);
   }, []);
 
   return (
     <section className="w-full overflow-hidden py-4">
-
-      
       <div className="relative mx-auto w-full">
-
-       
         <div
           ref={sliderRef}
           className="flex gap-6 overflow-x-auto scroll-smooth snap-x snap-mandatory px-4 md:px-7 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
-          {slides.map((slide) => (
+          {slides.map((slide, index) => (
             <div
               key={slide.id}
               className={`relative flex h-[220px] min-w-[88%] snap-start items-center justify-between overflow-hidden rounded-xl px-6 md:h-[300px] md:px-12 lg:min-w-[86%] lg:h-[340px] ${slide.background}`}
             >
              
-              <div className="relative z-10 flex flex-col items-start gap-1 md:gap-2">
+              <div className="pointer-events-none absolute -right-10 -top-20 h-48 w-48 rounded-full bg-white/20 blur-2xl md:h-72 md:w-72" />
 
-                <h2 className="text-2xl font-bold text-black md:text-4xl lg:text-5xl">
+              
+              <div className="relative z-10 flex flex-col items-start gap-1 md:gap-2">
+                <h2
+                  ref={(el) => {
+                    titleRefs.current[index] = el;
+                  }}
+                  className="text-2xl font-bold text-black md:text-4xl lg:text-5xl"
+                >
                   {slide.title}
                 </h2>
 
-                <p className="text-sm font-semibold text-green-700 md:text-lg">
+                <p
+                  ref={(el) => {
+                    subtitleRefs.current[index] = el;
+                  }}
+                  className="text-sm font-semibold text-green-700 md:text-lg"
+                >
                   {slide.subtitle}
                 </p>
 
                 <Link
+                  ref={(el) => {
+                    buttonRefs.current[index] = el;
+                  }}
                   href={slide.link}
                   className="mt-1 rounded-sm bg-green-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-green-700 md:text-sm"
                 >
                   {slide.buttonText}
                 </Link>
-
               </div>
 
               
-              <div className="relative mr-1 h-[170px] w-[170px] shrink-0 md:mr-8 md:h-[250px] md:w-[250px] lg:h-[290px] lg:w-[290px]">
+              <div
+                ref={(el) => {
+                  imageRefs.current[index] = el;
+                }}
+                className="relative mr-1 h-[170px] w-[170px] shrink-0 md:mr-8 md:h-[250px] md:w-[250px] lg:h-[290px] lg:w-[290px]"
+              >
                 <Image
                   src={slide.image}
                   alt={slide.title}
                   fill
-                  sizes="(max-width: 768px) 115px, 165px"
+                  sizes="(max-width: 768px) 170px, 290px"
                   className="object-contain"
                   priority={slide.id === 1}
                 />
               </div>
-
             </div>
           ))}
         </div>
 
-        
+       
         <button
           onClick={previousSlide}
           aria-label="Previous slide"
@@ -156,7 +299,6 @@ export default function HeroSlider() {
         >
           <ChevronRight size={22} />
         </button>
-
       </div>
 
       
@@ -174,7 +316,6 @@ export default function HeroSlider() {
           />
         ))}
       </div>
-
     </section>
   );
 }

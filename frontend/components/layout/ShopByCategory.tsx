@@ -26,8 +26,6 @@ export default function ShopByCategory() {
     <section className="bg-[#F3F6EF] py-14 md:py-16">
 
       <div className="mx-auto max-w-7xl px-5 md:px-8">
-
-        {/* Section Heading */}
         <div className="mb-9 flex items-center justify-between">
 
           <div>
@@ -53,7 +51,7 @@ export default function ShopByCategory() {
 
         </div>
 
-        {/* Category Grid */}
+      
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7">
 
           {categories.map((category) => {

@@ -53,9 +53,9 @@ const products: Product[] = [
 
 export default function FeaturedProducts() {
   return (
-    <section className="mx-auto max-w-7xl px-5 py-12 md:px-8 md:py-16">
+    <section className="mx-auto max-w-7xl px-5 py-12 md:px-8 md:py-16 ">
 
-      {/* Section Heading */}
+      
       <div className="mb-8 flex items-center justify-between">
 
         <div>
@@ -81,7 +81,7 @@ export default function FeaturedProducts() {
 
       </div>
 
-      {/* Product Grid */}
+     
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 md:gap-6 lg:grid-cols-4">
         {products.map((product) => (
           <ProductCard key={product._id} product={product} />
