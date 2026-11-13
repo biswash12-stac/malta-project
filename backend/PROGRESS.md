@@ -1,6 +1,6 @@
 # Backend Progress
 
-Last updated: 2026-11-07
+Last updated: 2026-11-13
 
 Nepali grocery e-commerce API. Stack: Express 5, TypeScript, MongoDB Atlas (Mongoose), Zod, Envalid, Pino.
 
@@ -16,7 +16,9 @@ Phase 4 (orders) is merged in [PR #8](https://github.com/biswash12-stac/malta-pr
 
 Real password reset and 2FA emails were tested on 2026-11-07 with a test account: the emails arrived, the reset token worked once, and 2FA login waited for the code. Real Google sign-in is still untested.
 
-A whole-repo audit found 20 issues. Findings 2, 3, 4 and 9 are done, and the other 16 are still open (see Still To Do).
+Phase 6 (admin dashboard) started on 2026-11-13. The backend part, `GET /admin/stats` (FR-18), is built on the `feature/admin-stats` branch, with automated tests only.
+
+A whole-repo audit found 20 issues. Findings 2, 3, 4, 8 and 9 are done, and the other 15 are still open (see Still To Do).
 
 The security audit's code fixes are done. Finding 9 (production secrets) is a launch task. Finding 11 (registration reveals taken emails) still waits for email verification at registration.
 
@@ -80,8 +82,14 @@ The security audit's code fixes are done. Finding 9 (production secrets) is a la
 - A delivered order can be marked paid once. COD goes through a `PaymentProvider`, so digital payment can be added later
 - 10 placed orders per 15 minutes per IP address. Rejected attempts don't count
 
+### Admin stats
+- `GET /admin/stats` (admin) returns `totalRevenue`, `ordersToday` and `pendingOrders`
+- Revenue is the sum of `total`, in cents, for orders that are delivered or paid. Cancelled and unpaid open orders don't count
+- "Today" starts at midnight in Malta, including on the days the clocks change
+- The three numbers come from three queries run in parallel. Any query param returns a 400
+
 ### Tests and tooling
-- 144 automated tests: `orders` (21), `products` (15), `two-factor` (14), `startup-and-email` (3), `auth` (12), `auth-tokens` (10), `catalog-models` (10), `google` (10), `uploads` (10), `categories` (9), `password-reset` (9), `sessions` (9), `validate` (7) and `hardening` (5). Database tests use a temporary in-memory MongoDB
+- 147 automated tests: `orders` (24), `products` (15), `two-factor` (14), `startup-and-email` (3), `auth` (12), `auth-tokens` (10), `catalog-models` (10), `google` (10), `uploads` (10), `categories` (9), `password-reset` (9), `sessions` (9), `validate` (7) and `hardening` (5). Database tests use a temporary in-memory MongoDB
 - The catalog tests fail if a list query scans the whole collection or sorts in memory
 - Prettier formatting
 - Backend README (local only, not on GitHub)
@@ -127,6 +135,7 @@ All routes are under `/api/v1`.
 | `PATCH /admin/orders/:id/status` (admin) | `status`, `note?` | `{ order }` |
 | `PATCH /admin/orders/:id/delivery-date` (admin) | `estimatedDeliveryDate` (`YYYY-MM-DD` or `null`) | `{ order }` |
 | `PATCH /admin/orders/:id/payment` (admin) | `paymentStatus: "paid"` | `{ order }` |
+| `GET /admin/stats` (admin) | none | `{ totalRevenue, ordersToday, pendingOrders }`, revenue in cents |
 
 `user` is `{ id, username, email, role, twoFactorEnabled }`. A public category is `{ _id, name, slug }`, and admins also get `isActive`.
 
@@ -202,6 +211,8 @@ Error: `{ success: false, error: { code, message, details } }`
 | The order number counter runs outside the checkout transaction | Parallel orders don't conflict on one row. A failed checkout can leave a gap in the numbers |
 | Order items also store `unitSnapshot`, and `nameSnapshot` is the English name | The unit says what size was bought and can change later |
 | The admin list searches exact order numbers and phone numbers | Both use an index and stay fast on large lists |
+| Revenue counts orders that are delivered or paid, and "today" follows Malta's calendar | Developer's rule for FR-18. Under COD only a delivered order can be paid, so today this equals delivered orders. Order numbers already use Malta's date |
+| Stats live in the orders module, mounted at `/admin/stats` | They only read orders, so a separate module would add files without adding anything |
 
 ## Still To Do
 
@@ -217,7 +228,8 @@ Error: `{ success: false, error: { code, message, details } }`
 
 ### Whole-repo audit (still open)
 - [ ] Must fix, frontend: fake testimonials (1), made-up contact details and offers (5), blank admin pages (6), no login link or phone menu (7)
-- [ ] Should fix, backend and repo: `.gitignore` misses `.env.production` (8), no CI (10), no Secure cookie test (11), `ADMIN_PASSWORD` and the `test` database in `.env` (12), small leftovers (17)
+- [x] `.gitignore` misses `.env.production` (8): `.env.production` and `.env.test` added on 2026-11-13
+- [ ] Should fix, backend and repo: no CI (10), no Secure cookie test (11), `ADMIN_PASSWORD` and the `test` database in `.env` (12), small leftovers (17)
 - [ ] Should fix, frontend: dead links (13), product shape doesn't match the API (14), ESLint error (15), unplanned placeholder features (16)
 - [ ] Nice to have: reject a trailing slash in `CLIENT_URL` (18), return 409 for parallel product edits (19), fix drifted docs (20)
 
@@ -229,7 +241,8 @@ Error: `{ success: false, error: { code, message, details } }`
 - [ ] Temporary script to seed 100 placeholder products (the developer will provide it)
 
 ### Before later phases
-- [ ] Phase 6: build `GET /admin/stats` (FR-18)
+- [x] Phase 6: build `GET /admin/stats` (FR-18)
+- [ ] Try `GET /admin/stats` in Postman against Atlas
 - [ ] Frontend: get written design approval, as `documentV1/rules.md` requires
 
 ### Legal checks before launch (confirm with a Maltese adviser)
@@ -259,3 +272,4 @@ Error: `{ success: false, error: { code, message, details } }`
 - A double submit creates two orders, because there's no server-side duplicate check. The frontend must disable the button while submitting, and the admin can cancel a duplicate.
 - Checkout charges the current price, so a price change after adding to the cart changes the total. The frontend should show the returned total.
 - An admin saving a product's `stock` overwrites the number, so a sale made while the form was open is lost (audit finding 19).
+- The revenue total reads every order, because `paymentStatus` has no index, and the `$or` needs both sides indexed to avoid a full scan. That's fine for a small shop. If the dashboard gets slow, add a `paymentStatus` index or keep a running total.

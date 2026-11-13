@@ -5,6 +5,7 @@ import type { PaginationQuery } from "../../utils/common.schema.js";
 import type { AdminOrderQuery } from "./order.schema.js";
 import {
   getAdminOrder,
+  getAdminStats,
   getMyOrder,
   listAdminOrders,
   listMyOrders,
@@ -52,4 +53,8 @@ export const updateDeliveryDateHandler = async (req: Request<{ id: string }>, re
 
 export const updatePaymentHandler = async (req: Request<{ id: string }>, res: Response) => {
   sendSuccess(res, { order: await markOrderPaid(currentUserId(req), req.params.id) });
+};
+
+export const statsHandler = async (_req: Request, res: Response) => {
+  sendSuccess(res, await getAdminStats());
 };
