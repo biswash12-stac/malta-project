@@ -16,7 +16,7 @@ Phase 4 (orders) is merged in [PR #8](https://github.com/biswash12-stac/malta-pr
 
 Real password reset and 2FA emails were tested on 2026-11-07 with a test account: the emails arrived, the reset token worked once, and 2FA login waited for the code. Real Google sign-in is still untested.
 
-Phase 6 (admin dashboard) started on 2026-11-13. The backend part, `GET /admin/stats` (FR-18), is built on the `feature/admin-stats` branch, with automated tests only.
+Phase 6 (admin dashboard) started on 2026-11-13. The backend part, `GET /admin/stats` (FR-18), is merged in [PR #10](https://github.com/biswash12-stac/malta-project/pull/10), with automated tests only. All 147 tests passed on 2026-11-13.
 
 A whole-repo audit found 20 issues. Findings 2, 3, 4, 8 and 9 are done, and the other 15 are still open (see Still To Do).
 
