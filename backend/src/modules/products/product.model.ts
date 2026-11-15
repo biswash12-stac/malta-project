@@ -105,4 +105,7 @@ productSchema.index(
   { name: "product_search", weights: { nameEn: 10, nameNp: 10, description: 1 } }
 );
 
+// Image lookups: is this file used by any product? (upload checks, cleanup, replaced-image deletes)
+productSchema.index({ "images.publicId": 1 });
+
 export const ProductModel = model<Product>("Product", productSchema);

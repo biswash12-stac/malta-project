@@ -33,11 +33,12 @@ Nepali grocery e-commerce site for a Nepali client in Malta. Customers order and
 - Roles: `customer`, `admin`
 
 ## Current Status
-- Current phase: Phases 5 (public frontend) and 6 (admin dashboard) are in progress. Phases 2, 3 and 4 are completed; Phase 4 (orders) was merged in PR #8.
-- Done: Phase 2 (backend foundation, user model, auth routes, JWT cookie, role middleware, admin seed, automated auth tests) and Phase 3 (category and product APIs, indexes, `validateRequest`, signed Cloudinary uploads), merged in PRs #5, #6 and #7.
+- Current phase: Phases 5 (public frontend) and 6 (admin dashboard) are in progress. Phases 2, 3 and 4 are completed. Phase 6's backend (`GET /admin/stats`, FR-18) is done, merged in PR #10 and tagged `phase-6`; the admin dashboard pages are still open (frontend work).
+- Done: Phase 2 (backend foundation, user model, auth routes, JWT cookie, role middleware, admin seed, automated auth tests) and Phase 3 (category and product APIs, indexes, `validateRequest`, signed Cloudinary uploads), merged in PRs #5, #6 and #7; Phase 4 (orders), merged in PR #8; Phase 6 backend (admin stats), merged in PR #10.
 - Auth upgrade (access and refresh tokens, password reset, email 2FA, Google login) is merged in PR #7. Real password reset and 2FA emails are tested. Google sign-in still needs a client ID and a live test.
-- Phase 4 order API has automated tests, and checkout was tested in Postman on Atlas. `GET /admin/stats` (FR-18) waits for Phase 6.
-- Next: seed placeholder products and test Google sign-in. Remaining whole-repo audit findings are in `backend/PROGRESS.md`. Security audit code fixes are done; separating production secrets is a launch task (see `backend/PROGRESS.md`).
+- Phase 4 order API has automated tests, and checkout was tested in Postman on Atlas. `GET /admin/stats` has automated tests only.
+- Tests: the node:test suite (`npm test`) plus Jest and Supertest (`npm run test:jest`, `backend/tests/jest/`), added in PR #11. Both use in-memory MongoDB and never reach Atlas, Gmail or Cloudinary.
+- Next: build the admin dashboard pages (frontend), try `GET /admin/stats` in Postman on Atlas, and test Google sign-in. The 100 placeholder products are already seeded on the dev database (`npm run seed:dev`). Remaining whole-repo audit findings are in `backend/PROGRESS.md`. Security audit code fixes are done; separating production secrets is a launch task (see `backend/PROGRESS.md`).
 - Blocked: backend ESLint (no TypeScript 7 support yet). Frontend coding needs written design approval (Phase 1), and no approval is recorded yet.
 
 ## Open Questions for Client
@@ -71,6 +72,9 @@ Nepali grocery e-commerce site for a Nepali client in Malta. Customers order and
 | 2026-11-07 | €20.00 minimum order; €5.00 delivery below €30.00, free from €30.00; all of Malta, any locality | Client's final business rules |
 | 2026-11-07 | Order items also store `unitSnapshot` | The name and price alone don't say what size was bought, and `unit` can change later |
 | 2026-11-07 | Checkout limited to 10 placed orders per 15 minutes per IP | Unpaid orders hold back stock, so this limits deliberate draining |
+| 2026-11-13 | `GET /admin/stats`: revenue counts delivered or paid orders; "today" follows Malta's calendar | FR-18, developer's rule |
+| 2026-11-13 | Jest and Supertest added alongside node:test, with SWC instead of ts-jest | ts-jest doesn't support TypeScript 7; the existing node:test tests stay as they are |
+| 2026-11-14 | Cloudinary files are deleted only by the cleanup job, via tickets (uploads, removed and rejected images). Saves only claim tickets, and nothing deletes during a request | Removes the race where an edit's immediate delete could break another product's image (R-11). No backfill for images already on products |
 
 ## Working Rules Reminder
 Follow `rules.md`. Do not add features outside `PRD.md`. Keep controllers thin and services smart.

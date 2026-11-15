@@ -6,20 +6,38 @@ import { UPLOAD_FOLDER } from "../uploads/upload.service.js";
 
 const priceInCents = z.number().int().positive();
 
+// The folder plus exactly one safe name: no dots, extra slashes or "..", so an id can never
+// reach outside the folder (this id is what gets checked and deleted). Server-signed uploads
+// are products/<uuid>; older Cloudinary ids are letters, digits, "_" and "-".
+const PUBLIC_ID = new RegExp(`^${UPLOAD_FOLDER}/[A-Za-z0-9_-]{1,240}$`);
+const IMAGE_EXTENSIONS = "jpe?g|png|webp";
+
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// The url must be the canonical delivery url of exactly this file in our own account:
+// /<cloud>/image/upload/[v<version>/]<publicId>.<allowed extension>, with nothing extra.
+const isOwnImageUrl = (url: string, publicId: string) => {
+  // Zod still runs this refine when the url field itself failed, so an unparseable url must not throw.
+  if (!URL.canParse(url)) return false;
+  const parsed = new URL(url);
+  if (parsed.href !== url) return false;
+  if (parsed.username || parsed.password || parsed.port || parsed.search || parsed.hash) {
+    return false;
+  }
+  const cloud = escapeRegExp(env.CLOUDINARY_CLOUD_NAME);
+  return new RegExp(
+    `^/${cloud}/image/upload/(?:v\\d+/)?${escapeRegExp(publicId)}\\.(?:${IMAGE_EXTENSIONS})$`
+  ).test(parsed.pathname);
+};
+
 const productImageSchema = z
   .strictObject({
     url: z.url({ protocol: /^https$/, hostname: /^res\.cloudinary\.com$/ }),
-    // Limited to our folder, because this id is what gets deleted when an image is replaced.
-    publicId: z
-      .string()
-      .regex(new RegExp(`^${UPLOAD_FOLDER}/[\\w./-]+$`))
-      .max(255),
+    publicId: z.string().regex(PUBLIC_ID, "Invalid image id"),
   })
-  // Only images in our own account, so a product can't point at someone else's files.
+  // Only images in our own account and folder, so a product can't point at someone else's files.
   .refine(
-    ({ url, publicId }) =>
-      new URL(url).pathname.startsWith(`/${env.CLOUDINARY_CLOUD_NAME}/image/upload/`) &&
-      url.includes(publicId),
+    ({ url, publicId }) => isOwnImageUrl(url, publicId),
     "Image must be one uploaded to this store"
   );
 

@@ -2,6 +2,8 @@ import { app } from "./app.js";
 import { env } from "./config/env.js";
 import { connectDB } from "./config/db.js";
 import { logger } from "./utils/logger.js";
+import { startUploadCleanupSchedule } from "./modules/uploads/upload-cleanup.js";
+import { isCloudinaryConfigured } from "./modules/uploads/upload.service.js";
 import mongoose from "mongoose";
 
 const start = async (): Promise<void> => {
@@ -18,13 +20,17 @@ const start = async (): Promise<void> => {
     logger.info(`Server listening on http://localhost:${env.PORT} (${env.NODE_ENV})`);
   });
 
-  // 3. Graceful shutdown.
+  // 3. Hourly cleanup of abandoned image uploads (see upload-cleanup.ts). Only with Cloudinary set up.
+  const stopUploadCleanup = isCloudinaryConfigured() ? startUploadCleanupSchedule() : () => {};
+
+  // 4. Graceful shutdown.
   //    Render sends SIGTERM before killing the process. We close the HTTP server
   //    (stop accepting new requests), then close the DB (finish in-flight writes),
   //    then exit. If we don't do this, in-flight orders/stock decrements can be
   //    killed mid-write during redeploys.
   const shutdown = async (signal: string): Promise<void> => {
     logger.info(`${signal} received — shutting down`);
+    stopUploadCleanup();
 
     server.close(async () => {
       try {

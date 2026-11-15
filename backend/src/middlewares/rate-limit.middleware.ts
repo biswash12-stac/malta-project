@@ -58,6 +58,14 @@ export const orderRateLimit = rateLimit({
   skipFailedRequests: true,
 });
 
+// Every signature writes an upload ticket, so a stolen admin session can't flood the collection.
+// 60 per 15 minutes is far above a real admin adding product photos.
+export const uploadSignatureRateLimit = rateLimit({
+  ...limitOptions,
+  windowMs: 15 * 60 * 1000,
+  limit: 60,
+});
+
 // Load balancers and uptime monitors call these every few seconds, so they're never limited or logged.
 export const HEALTH_PATHS = ["/api/v1/health", "/api/v1/health/ready"];
 
