@@ -12,6 +12,7 @@ beforeAll(async () => {
     NODE_ENV: "production",
     TWO_FACTOR_SECRET: "jest-two-factor-".repeat(3),
     SMTP_HOST: "smtp.invalid",
+    SMTP_PORT: "587",
     SMTP_USER: "jest",
     SMTP_PASS: "jest",
     MAIL_FROM: "no-reply@shop.test",
