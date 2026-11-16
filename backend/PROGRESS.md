@@ -1,6 +1,6 @@
 # Backend Progress
 
-Last updated: 2026-11-15
+Last updated: 2026-11-16
 
 Nepali grocery e-commerce API. Stack: Express 5, TypeScript, MongoDB Atlas (Mongoose), Zod, Envalid, Pino.
 
@@ -17,6 +17,8 @@ Phase 4 (orders) is merged in [PR #8](https://github.com/biswash12-stac/malta-pr
 Real password reset and 2FA emails were tested on 2026-11-07 with a test account: the emails arrived, the reset token worked once, and 2FA login waited for the code. Real Google sign-in is still untested.
 
 Phase 6 (admin dashboard) started on 2026-11-13. The backend part, `GET /admin/stats` (FR-18), is merged in [PR #10](https://github.com/biswash12-stac/malta-project/pull/10), with automated tests only. All 147 tests passed on 2026-11-13.
+
+A production-readiness audit on 2026-11-15 found no Critical or High backend issues; its findings and their status are in `documentV1/SECURITY_AUDIT.md` §11. A-01 (2FA guess limit) is implemented and tested in the working tree but **not committed**. Its final-review follow-ups were finished on 2026-11-16. Only the shared test-client timeout remains, as a separate task (see Still To Do → A-01 follow-up).
 
 A whole-repo audit found 20 issues. Findings 2, 3, 4, 8 and 9 are done, and the other 15 are still open (see Still To Do).
 
@@ -40,7 +42,7 @@ The security audit's code fixes are done. Finding 9 (production secrets) is a la
 - Two httpOnly cookies: `access_token` (15 minutes) and `refresh_token` (7 days, stored only as a hash). Tokens never appear in response bodies
 - `POST /auth/refresh` replaces the refresh token each time. Reusing a replaced token after 10 seconds ends all of that user's sessions
 - Forgot and reset password: emailed link, valid 30 minutes, works once, ends all sessions. The response doesn't reveal whether the email has an account
-- Email 2FA: 6-digit code valid 10 minutes, stored as an HMAC. Five wrong tries cancel it and hold back new codes for 15 minutes. It also applies to Google login
+- Email 2FA: 6-digit code valid 10 minutes, stored as an HMAC. Guesses are limited per account, not per code: at most 5 in a fixed 15-minute window, and a new code doesn't reset them. The 5th wrong guess cancels the code and holds back new codes for 15 minutes (A-01). It also applies to Google login
 - Google login with `POST /auth/google`: creates a customer for a new email and links existing accounts safely
 - Nodemailer mailer: uses SMTP when set, and logs emails in development when it isn't
 - `requireAuth` and `requireRole("admin")` middleware
@@ -98,8 +100,9 @@ The security audit's code fixes are done. Finding 9 (production secrets) is a la
 - The three numbers come from three queries run in parallel. Any query param returns a 400
 
 ### Tests and tooling
-- 217 automated tests: `orders` (30), `uploads` (39), `upload-cleanup` (31), `dev-seed` (4), `products` (15), `two-factor` (14), `startup-and-email` (3), `auth` (12), `auth-tokens` (10), `catalog-models` (10), `google` (10), `categories` (9), `password-reset` (9), `sessions` (9), `validate` (7) and `hardening` (5). Database tests use a temporary in-memory MongoDB
+- 235 automated tests: `orders` (30), `uploads` (39), `upload-cleanup` (31), `dev-seed` (4), `products` (15), `two-factor` (32), `startup-and-email` (3), `auth` (12), `auth-tokens` (10), `catalog-models` (10), `google` (10), `categories` (9), `password-reset` (9), `sessions` (9), `validate` (7) and `hardening` (5). Database tests use a temporary in-memory MongoDB
 - The catalog tests fail if a list query scans the whole collection or sorts in memory
+- Test-harness limit: the four 2FA race tests hold requests open on purpose and have 30-second timeouts. A test that times out fails, and its pause hook and fake clock are removed. But if a request it holds has stalled, the test process may stay alive until it is stopped, because the shared test client (`tests/auth-test-app.ts`) can't cancel a request yet. Giving its `request()` an `AbortSignal` would fix that.
 - Jest and Supertest, run by `npm run test:jest` from `tests/jest/`, with 32 tests:
   - health, readiness, the version header, CORS, malformed JSON and an empty category list
   - a `role` sent at registration, `$` operators in JSON bodies, and Secure cookies in production
@@ -216,6 +219,7 @@ Error: `{ success: false, error: { code, message, details } }`
 - Security: the seed accepted short admin passwords. It now requires 12 or more characters.
 - Security: only login and register were rate limited. The whole API now has a general limit.
 - Security: passwords could be guessed from many IP addresses. Each account now has its own limit on failed logins.
+- Security (A-01, 2026-11-15, production-readiness audit): logging in again a minute later sent a new 2FA code with its wrong-guess count reset, so someone with the password got about 4 guesses a minute instead of 5 per 15-minute lock. Guesses are now limited per account: at most 5 in a fixed 15-minute window (new `twoFactorWindowStart` field) that opens at the first counted guess. Each guess is counted in one atomic write; the lock after a 5th wrong guess and the reset after a correct one are separate writes. A new code doesn't touch the count or the window; only the window ending or a correct code starts it again. No code is sent while the window's 5 guesses are used up, so a lock that was never written (a crash between counting and locking) acts as a lock and ends with the window instead of sending codes that can't be used. The lock written by a fifth wrong guess now applies only while that guess's code is still stored, so it can't cancel a code sent after the window ended, or lock an owner whose correct guess logged in at the same moment. 18 regression tests: the lock and resend, the fixed window (moved on with a faked clock, only `Date`), its exact 15-minute boundary, a window ending before the lock, recovery after the window and after the lock, the reset after a correct code, the 2FA-on and 2FA-off flows, the stored count, an interrupted lock, an account from before the window field, guesses at an expired code, parallel wrong guesses either side of a new code, and four races between a guess and a login or another guess. Existing accounts need no migration: a missing window counts as ended. Verified on 2026-11-15 (235 node:test and 32 Jest tests, repeated 2FA runs, mutation checks; the final review found no application defect). Review follow-ups on 2026-11-16 made three tests stricter: the owner race checks the cleared count and window, the parallel bursts check the count, and the expired code checks the exact error. Each new check was shown to fail against a broken guard, and the source was then restored byte for byte. Re-verified on 2026-11-16: 235 node:test and 32 Jest tests, the 2FA file 3 times in a row, tsc, Prettier, build, and `npm audit --omit=dev` (0). Not committed yet
 - Security: `12345678` and `password` were accepted. Common passwords are now rejected.
 - Security: a server missing `NODE_ENV` ran with production protections off. It now refuses to start.
 - Security: the API read HTML form posts, which any site can send. It now reads JSON only.
@@ -287,6 +291,17 @@ Error: `{ success: false, error: { code, message, details } }`
 
 ## Still To Do
 
+### A-01 follow-up (final review, 2026-11-15; before committing A-01)
+None of these are application defects. The code changes need approval.
+- [x] The owner-race test now also checks that the correct code cleared the count and the window, and that the next login gets a working code: done 2026-11-16
+- [x] Known Limits overstated how the owner is alerted after a successful verification: corrected 2026-11-16
+- [x] The parallel-bursts test checks the count (4) after its first burst, so lost updates can't pass: done 2026-11-16
+- [x] The expired-code test sends the right but expired code and checks the exact error (`VALIDATION_ERROR`, "Invalid or expired code"): done 2026-11-16
+- [ ] Separate task: a stalled request in a race test can keep the test process alive. The shared test client (`tests/auth-test-app.ts`) needs request cancellation, and CI needs `timeout-minutes`
+- [x] The owner-race abort listener uses `{ once: true }`, and its comment says node:test aborts the signal whenever a test ends (checked on Node 22.23.5): done 2026-11-16
+- [x] The over-width A-01 comments (test line 603, service line 20) were rewrapped to 100 characters: done 2026-11-16
+- [x] The Known Limits reference to R-13 didn't say where R-13 is defined: corrected 2026-11-16
+
 ### Auth upgrade
 - [ ] Create a free Google OAuth client ID and set `GOOGLE_CLIENT_ID` in `.env`
 - [x] Set up Gmail SMTP with an app password and set the `SMTP_*` values in `.env` (real emails tested on 2026-11-07)
@@ -348,6 +363,18 @@ Error: `{ success: false, error: { code, message, details } }`
 - A worker stalled past the job lock's 10-minute lease can run alongside a newer worker. Per-ticket claims still stop both from handling the same ticket.
 - The cleanup's claim query uses the `createdAt` index only. Fine at this shop's size; add a compound index if tickets ever number in the tens of thousands.
 - Ticket claims compare timestamps written by whichever server set them. With several API instances, their clocks must agree to within a few minutes (NTP), or one instance could treat another's claim as expired. Today there's one instance. It never blocks other tickets, but nothing alerts on it except the `partial` status in the logs.
+- 2FA guesses are limited to 5 per account in a fixed 15-minute window (A-01). Accepted edge behaviour:
+  - Bursts at a window boundary. This is an edge case, not the normal rate: normally at most 5 guesses are counted per 15-minute window, and the 5th wrong one locks new codes for 15 minutes. A window opens at its first counted guess, so only its 2nd to 5th guesses can fall just before it ends.
+    - Within seconds of a boundary, without a race: up to 8 guesses. That's the 2nd to 4th of the earlier window (no lock yet) and 5 at the start of the next.
+    - Within seconds of a boundary, with a race: up to 9. A 5th guess is counted just before the window ends, and its lock hasn't taken effect when the next window opens. Either its lock write is delayed (more guesses on the same code count in the new window), or a new code replaces the guessed one first, and then that lock isn't written at all. The lock only applies while the guessed code is still stored, and a new code can only be sent once the window has ended.
+    - Counting the guess that opened the earlier window: up to 9 (no race) or 10 (race) within roughly 15 minutes.
+    - Each window still counts at most 5, so over time the rate stays at about 5 guesses per 15 minutes.
+  - Someone who has the password shares the owner's limit and can use it up, so the owner may get fewer tries or a lock. That is the same trade-off as the failed-login lockout; the fix is a new password.
+  - A correct code starts the count and the window again. That covers the owner finishing a 2FA login, or turning 2FA on or off. So a mistyped code doesn't count against the owner's next login. The trade-off: someone who also has the password isn't held to 5 guesses per 15 minutes across the owner's successful verifications. After each one, that person can get a fresh window of up to 5 guesses. It only happens as often as the owner verifies, each guess has a 1-in-a-million chance, and a new password ends it. The owner isn't always alerted: someone who logs in during the owner's own 60-second resend wait guesses the owner's current code, and no extra email is sent.
+  - While codes are held back (resend wait, lock or used-up guesses), login still answers `requires2FA` and the 2FA-on/off requests still say a code was emailed, but no email is sent. The API doesn't yet say why (a separate, frontend-compatible change is proposed).
+  - If sending the email fails, the handler clears `twoFactorNextCodeAt` without checking it, which can shorten a lock written meanwhile; the window still allows at most 5 guesses per 15 minutes. Behaviour unchanged on purpose.
+  - Accounts that were mid-2FA when the window field was deployed get one fresh window at their next guess.
+  - Windows and locks use each server's clock, like the ticket claims above (R-13 in `documentV1/SECURITY_AUDIT.md`).
 - Password reset and 2FA codes both go to the same inbox, so someone who controls that email can pass both. Authenticator apps would be stronger.
 - Logging out ends the user's sessions on every device.
 - Password reset links are logged by the frontend's server if it logs URLs, and the reset page should send no referrer.

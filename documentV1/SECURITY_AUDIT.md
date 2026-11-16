@@ -353,3 +353,40 @@ These don't give access to the backend: the API ignores the browser's role, pric
 | N-01 | — | Not applicable |
 | R-11 | High-ish (data integrity, admin only) | Fixed 2026-11-14: regression tests, verified locally; not committed (see §9a) |
 | R-14 | Low likelihood, high impact (data integrity) | Fixed 2026-11-15: regression test, verified locally; not committed (see §9a) |
+| A-01 | Low–Medium (2FA guess limit bypassed by requesting a new code; needs the password) | Implemented and tested 2026-11-15, **not committed**: at most 5 guesses per account in a fixed 15-minute window (`twoFactorWindowStart`), not reset by a new code; no code is sent while the window's guesses are used up; the lock write is tied to the guessed code; 18 regression tests, verified locally. Its §11 review follow-ups were finished 2026-11-16, except item 5 (a separate test-harness task). Accepted edge behaviour is in `PROGRESS.md` Known Limits |
+
+## 11. Production-readiness audit (2026-11-15)
+
+A read-only audit of the whole backend at `34e2afb`, plus a `/code-review` of the branch, checked against the code. **No Critical or High backend findings.** Launch is still blocked by the open items above (F-01 to F-03, S-02, S-06, S-08) and by the operational work in `architecture.md` §8 (Production operations, Atlas checklist).
+
+| ID | Severity | Finding | Status |
+|---|---|---|---|
+| A-01 | Low–Medium | 2FA guess counter reset whenever a new code was sent | Implemented and tested, not committed (§10). Review items done 2026-11-16, except item 5 (separate task): see below |
+| A-02 | Low | Requests refused by the Origin check are never logged (`app.ts`: Origin check before the request logger) | Open |
+| A-03 | Low | A 500 error log can't be matched to its request (no request id) | Open |
+| A-04 | Low | Delivery-date and "mark paid" updates run outside a transaction: a concurrent cancel can leave a stale history entry, and a double click logs payment twice | Open; plan ready (transactions, as status changes already use) |
+| A-05 | Low | Registration reveals whether an email is taken (also whole-repo audit finding 11) | Open; decision: accept or neutral response |
+| A-06 | Low | Shutdown doesn't wait for a running upload-cleanup pass | Open |
+| A-07 | Low | `npm run seed:dev` only checks `NODE_ENV`, not which database it writes to | Open; plan ready (confirm the database name) |
+| A-08 | Info | `GOOGLE_CLIENT_ID` is required in production even if Google sign-in isn't used | Open; depends on the Google sign-in decision |
+
+**To verify (not confirmed defects):**
+- **P-01:** Cloudinary Admin API limits for the per-image checks. This matters for a future bulk import.
+- **P-02:** whether the host keeps routing requests while the API shuts down.
+- **P-03:** the cleanup backlog under abuse (at most 200 tickets per run).
+- **P-04:** stock held by unpaid orders. A limit of two active unpaid orders per customer is proposed and awaits the client.
+- **P-05:** backups and restore.
+- **P-06:** GDPR retention.
+- **P-07:** CI hasn't run on `34e2afb`.
+
+**A-01 final review (2026-11-15): items.** None of these are application defects. Items 1, 3, 4, 6 and 8 were done on 2026-11-16. Each new check was shown to fail against a broken guard, then passed again once the source was restored. Details are in `PROGRESS.md`.
+1. The owner-race test should also check that the correct code cleared the count and the window. **Done.**
+2. The Known Limits text overstated how the owner is alerted. **Corrected in `PROGRESS.md` on 2026-11-16.**
+3. The parallel-bursts test should check the count after its first burst. **Done.**
+4. The expired-code test should check the specific error, not just a 400. **Done.**
+5. A stalled request in a race test can keep the test process alive. This needs request cancellation in the shared test client and a CI timeout (a separate task).
+6. Optional: `{ once: true }` on the owner-race abort listener, and a corrected comment. **Done.**
+7. The `PROGRESS.md` reference to R-13 didn't say where it's defined. **Corrected on 2026-11-16.**
+8. One test comment is 101 characters, 1 over the width. **Done**, along with one service comment of the same width.
+
+**Planned, not started:** 2FA API feedback (`codeSent`, `retryAfterSeconds` on login, Google login and the 2FA on/off requests). These fields are additive, but the JSON needs agreeing with the frontend developer first.

@@ -39,6 +39,7 @@ Nepali grocery e-commerce site for a Nepali client in Malta. Customers order and
 - Phase 4 order API has automated tests, and checkout was tested in Postman on Atlas. `GET /admin/stats` has automated tests only.
 - Tests: the node:test suite (`npm test`) plus Jest and Supertest (`npm run test:jest`, `backend/tests/jest/`), added in PR #11. Both use in-memory MongoDB and never reach Atlas, Gmail or Cloudinary.
 - Next: build the admin dashboard pages (frontend), try `GET /admin/stats` in Postman on Atlas, and test Google sign-in. The 100 placeholder products are already seeded on the dev database (`npm run seed:dev`). Remaining whole-repo audit findings are in `backend/PROGRESS.md`. Security audit code fixes are done; separating production secrets is a launch task (see `backend/PROGRESS.md`).
+- Branch state (2026-11-16): PRs #11 to #13 are merged. The upload lifecycle, security fixes and dev seed are committed locally as `34e2afb` on `feature/lifecycle-and-seed`, not pushed. A-01 (2FA guess window) is implemented and tested but not committed. Its review follow-ups were finished on 2026-11-16, and it's ready for a commit decision. Open items, audit status and decisions are in `backend/PROGRESS.md` (Still To Do) and `SECURITY_AUDIT.md` §10–§11.
 - Blocked: backend ESLint (no TypeScript 7 support yet). Frontend coding needs written design approval (Phase 1), and no approval is recorded yet.
 
 ## Open Questions for Client
@@ -75,6 +76,7 @@ Nepali grocery e-commerce site for a Nepali client in Malta. Customers order and
 | 2026-11-13 | `GET /admin/stats`: revenue counts delivered or paid orders; "today" follows Malta's calendar | FR-18, developer's rule |
 | 2026-11-13 | Jest and Supertest added alongside node:test, with SWC instead of ts-jest | ts-jest doesn't support TypeScript 7; the existing node:test tests stay as they are |
 | 2026-11-14 | Cloudinary files are deleted only by the cleanup job, via tickets (uploads, removed and rejected images). Saves only claim tickets, and nothing deletes during a request | Removes the race where an edit's immediate delete could break another product's image (R-11). No backfill for images already on products |
+| 2026-11-15 | 2FA guesses are limited per account: at most 5 in a fixed 15-minute window (`twoFactorWindowStart`). A new code doesn't reset them; a correct code does (A-01, not committed yet) | Logging in again sent a new code with the count reset, which let someone with the password make about 4 guesses a minute |
 
 ## Working Rules Reminder
 Follow `rules.md`. Do not add features outside `PRD.md`. Keep controllers thin and services smart.

@@ -93,7 +93,7 @@ Validation errors put field messages in `details`. Errors about the input as a w
 | `POST /auth/2fa/disable/request` | login | none | `null`, emails a code |
 | `POST /auth/2fa/disable` | login | `{ code }` | `{ twoFactorEnabled: false }` |
 
-`user` is `{ id, username, email, role: "customer" | "admin", twoFactorEnabled }`. 2FA codes last 10 minutes; five wrong tries lock code entry for 15 minutes.
+`user` is `{ id, username, email, role: "customer" | "admin", twoFactorEnabled }`. 2FA codes last 10 minutes. Guesses are limited per account, not per code: at most 5 in a fixed 15-minute window, and asking for a new code doesn't reset them. The 5th wrong guess cancels the code and holds back new codes for 15 minutes. A correct code starts the count again. While codes are held back, login still answers `{ requires2FA: true }`, and the enable and disable requests still answer `null`, but no email is sent.
 
 ## Categories
 
