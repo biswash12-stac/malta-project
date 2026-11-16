@@ -92,3 +92,7 @@ export const env = cleanEnv(process.env, {
     default: "info",
   }),
 });
+
+// The frontend's exact origin (scheme, host and port), used by both CORS and the Origin check so they
+// can never disagree, e.g. when CLIENT_URL is written with a trailing slash.
+export const CLIENT_ORIGIN = new URL(env.CLIENT_URL).origin;

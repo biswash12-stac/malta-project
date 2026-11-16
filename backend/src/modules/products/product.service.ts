@@ -4,7 +4,11 @@ import type { PaginationQuery } from "../../utils/common.schema.js";
 import { pageOf, skipFor } from "../../utils/pagination.js";
 import { slugify } from "../../utils/slugify.js";
 import { CategoryModel } from "../categories/category.model.js";
-import { assertImagesAllowed, deleteImagesInBackground } from "../uploads/upload.service.js";
+import {
+  assertImagesAllowed,
+  claimUploadTickets,
+  queueImageRemoval,
+} from "../uploads/upload.service.js";
 import { ProductModel, type Product } from "./product.model.js";
 import { applyPriceRules } from "./product.pricing.js";
 import type {
@@ -112,6 +116,8 @@ const assertCategoryExists = async (id: string) => {
 const assertNewImagesAllowed = async (images: { publicId: string }[] | undefined) => {
   const publicIds = (images ?? []).map((image) => image.publicId);
   if (publicIds.length === 0) return;
+  // Claim first, so the cleanup job can't delete an image while this save checks and stores it.
+  await claimUploadTickets(publicIds);
   const inUse = new Set<string>(
     await ProductModel.distinct("images.publicId", { "images.publicId": { $in: publicIds } })
   );
@@ -143,24 +149,21 @@ export const updateProduct = async (id: string, input: UpdateProductInput) => {
   await assertNewImagesAllowed(input.images);
 
   const previousPrice = product.offerPrice ?? product.price;
-  const previousImages = product.images.map((image) => image.publicId);
+  if (input.images) {
+    // Images this edit takes off the product are queued for deletion, never deleted here: another
+    // product may be saving one right now. Queued before the save, so a crash can't lose the request;
+    // if the save fails, the cleanup sees the image still in use and only drops the ticket.
+    const kept = new Set(input.images.map((image) => image.publicId));
+    const removed = product.images
+      .map((image) => image.publicId)
+      .filter((publicId) => !kept.has(publicId));
+    await queueImageRemoval(removed, id);
+  }
   // The slug isn't set here: product URLs stay the same when a product is renamed.
   product.set(input);
   applyPriceRules(product, previousPrice);
   await product.save(); // save() runs the model's offer price check against the stored price
-
-  const kept = new Set(product.images.map((image) => image.publicId));
-  await deleteUnusedImages(previousImages.filter((publicId) => !kept.has(publicId)));
   return getAdminProduct(id);
-};
-
-// Only after the save, so a rejected edit can't lose an image. Skips any image another product uses.
-const deleteUnusedImages = async (publicIds: string[]) => {
-  if (publicIds.length === 0) return;
-  const inUse = new Set<string>(
-    await ProductModel.distinct("images.publicId", { "images.publicId": { $in: publicIds } })
-  );
-  deleteImagesInBackground(publicIds.filter((publicId) => !inUse.has(publicId)));
 };
 
 // Soft delete: orders and history can still refer to the product.

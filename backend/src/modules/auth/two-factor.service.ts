@@ -16,21 +16,41 @@ const hashCode = (userId: string, code: string) =>
 const invalidCode = () =>
   AppError.badRequest("Invalid input", { code: ["Invalid or expired code"] });
 
-// Sends nothing while the resend wait or a lock is running; the earlier code stays valid.
+// Guesses are limited per account, not per code: at most MAX_ATTEMPTS in a fixed window that opens
+// at the first counted guess (A-01). A new code doesn't touch the count or the window, so asking
+// for one can't buy more guesses; only the window ending or a correct code starts the count again.
+const WINDOW_MS = LOCK_MS;
+
+// True while guesses may still be counted: under the limit, or the window has ended. A missing
+// window (never guessed, last code correct, or an account from before windows) counts as ended.
+const mayGuess = (now: Date) => ({
+  $or: [
+    { twoFactorAttempts: { $lt: MAX_ATTEMPTS } },
+    { twoFactorWindowStart: null },
+    { twoFactorWindowStart: { $lte: new Date(now.getTime() - WINDOW_MS) } },
+  ],
+});
+
+// Sends nothing while the resend wait or a lock is running, or while the window's guesses are used
+// up (which also covers a lock that was never written, e.g. after a crash). Otherwise the new code
+// replaces the previous one at once, so the previous code stops working even if this email then
+// fails to send.
 export const sendCode = async (user: UserDocument): Promise<void> => {
   const code = randomInt(0, 1_000_000).toString().padStart(6, "0");
-  const now = Date.now();
+  const now = new Date();
 
   const { modifiedCount } = await UserModel.updateOne(
     {
       _id: user._id,
-      $or: [{ twoFactorNextCodeAt: null }, { twoFactorNextCodeAt: { $lte: new Date(now) } }],
+      $and: [
+        { $or: [{ twoFactorNextCodeAt: null }, { twoFactorNextCodeAt: { $lte: now } }] },
+        mayGuess(now),
+      ],
     },
     {
       twoFactorCode: hashCode(user.id, code),
-      twoFactorExpires: new Date(now + CODE_MS),
-      twoFactorAttempts: 0,
-      twoFactorNextCodeAt: new Date(now + RESEND_MS),
+      twoFactorExpires: new Date(now.getTime() + CODE_MS),
+      twoFactorNextCodeAt: new Date(now.getTime() + RESEND_MS),
     }
   );
   if (modifiedCount === 0) return;
@@ -56,11 +76,29 @@ const checkCode = async (userId: string, code: string): Promise<UserDocument> =>
   if (user.twoFactorExpires.getTime() <= Date.now()) throw invalidCode();
   const storedCode = user.twoFactorCode;
 
-  // Counted in the database first, so parallel guesses can't exceed the limit.
+  // Counted in the database first, in one atomic write, so parallel guesses can't exceed the limit.
+  // A pipeline, so a guess after the window ended can open a new window in that same write.
+  const now = new Date();
+  const windowEnded = {
+    $lte: [
+      { $ifNull: ["$twoFactorWindowStart", new Date(0)] },
+      new Date(now.getTime() - WINDOW_MS),
+    ],
+  };
   const counted = await UserModel.findOneAndUpdate(
-    { _id: userId, twoFactorCode: storedCode, twoFactorAttempts: { $lt: MAX_ATTEMPTS } },
-    { $inc: { twoFactorAttempts: 1 } },
-    { returnDocument: "after" }
+    { _id: userId, twoFactorCode: storedCode, ...mayGuess(now) },
+    [
+      {
+        $set: {
+          twoFactorAttempts: {
+            $cond: [windowEnded, 1, { $add: [{ $ifNull: ["$twoFactorAttempts", 0] }, 1] }],
+          },
+          twoFactorWindowStart: { $cond: [windowEnded, now, "$twoFactorWindowStart"] },
+        },
+      },
+    ],
+    // Pipeline values skip Mongoose's casting and validation, so only plain numbers and dates here.
+    { returnDocument: "after", updatePipeline: true }
   ).select("+twoFactorAttempts");
   if (!counted) throw invalidCode();
 
@@ -70,8 +108,10 @@ const checkCode = async (userId: string, code: string): Promise<UserDocument> =>
   );
   if (!matches) {
     if ((counted.twoFactorAttempts ?? 0) >= MAX_ATTEMPTS) {
+      // Only while the guessed code is still the stored one: if a correct guess has logged in, or a
+      // new code was sent once the window ended, this older guess must not lock or cancel it.
       await UserModel.updateOne(
-        { _id: userId },
+        { _id: userId, twoFactorCode: storedCode },
         {
           $unset: { twoFactorCode: "", twoFactorExpires: "" },
           $set: { twoFactorNextCodeAt: new Date(Date.now() + LOCK_MS) },
@@ -81,9 +121,17 @@ const checkCode = async (userId: string, code: string): Promise<UserDocument> =>
     throw invalidCode();
   }
 
+  // The right code proves the inbox is theirs, so the count and the window start again.
   const { modifiedCount } = await UserModel.updateOne(
     { _id: userId, twoFactorCode: storedCode },
-    { $unset: { twoFactorCode: "", twoFactorExpires: "" } }
+    {
+      $unset: {
+        twoFactorCode: "",
+        twoFactorExpires: "",
+        twoFactorAttempts: "",
+        twoFactorWindowStart: "",
+      },
+    }
   );
   if (modifiedCount === 0) throw invalidCode();
   return user;

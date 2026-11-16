@@ -7,6 +7,8 @@
     "test:jest": "node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/jest/bin/jest.js",
     "format": "prettier --write src tests",
     "seed:admin": "tsx src/scripts/seed-admin.ts",
+    "cleanup:uploads": "tsx src/scripts/cleanup-uploads.ts",
+    "seed:dev": "tsx src/scripts/seed-dev-catalog.ts",
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js"

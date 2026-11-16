@@ -17,7 +17,8 @@ export const router = Router();
  * Used by deploy platform and uptime monitors.
  */
 router.get("/health", (_req, res) => {
-  sendSuccess(res, { status: "ok", uptime: process.uptime() });
+  // No uptime: it would tell an attacker when the in-memory rate-limit counters were last reset.
+  sendSuccess(res, { status: "ok" });
 });
 
 /**

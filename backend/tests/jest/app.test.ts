@@ -11,6 +11,37 @@ describe("every response", () => {
   });
 });
 
+describe("CORS", () => {
+  // CLIENT_URL is http://shop.test in tests (setup-env.ts) and http://localhost:3000 in .env.
+  const preflight = (origin: string, headers: string) =>
+    request(app)
+      .options("/api/v1/orders")
+      .set("Origin", origin)
+      .set("Access-Control-Request-Method", "POST")
+      .set("Access-Control-Request-Headers", headers);
+
+  it("lets the frontend send cookies and the three allowed headers", async () => {
+    const res = await preflight("http://shop.test", "content-type,authorization,idempotency-key");
+
+    expect(res.status).toBe(204);
+    expect(res.headers["access-control-allow-origin"]).toBe("http://shop.test");
+    expect(res.headers["access-control-allow-credentials"]).toBe("true");
+    expect(res.headers["access-control-allow-headers"]).toBe(
+      "Content-Type,Authorization,Idempotency-Key"
+    );
+  });
+
+  it("doesn't allow other headers just because the browser asks for them", async () => {
+    const res = await preflight("http://shop.test", "x-anything");
+    expect(res.headers["access-control-allow-headers"]).not.toContain("x-anything");
+  });
+
+  it("never names another site as allowed, so the browser blocks it", async () => {
+    const res = await preflight("http://evil.test", "content-type");
+    expect(res.headers["access-control-allow-origin"]).toBe("http://shop.test");
+  });
+});
+
 describe("malformed JSON", () => {
   it("returns a 400 with the standard error envelope", async () => {
     const res = await request(app)

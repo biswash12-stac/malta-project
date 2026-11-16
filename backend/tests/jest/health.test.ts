@@ -11,7 +11,7 @@ describe("GET /api/v1/health", () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
       success: true,
-      data: { status: "ok", uptime: expect.any(Number) },
+      data: { status: "ok" }, // no uptime: it would reveal when in-memory rate limits last reset
     });
   });
 });

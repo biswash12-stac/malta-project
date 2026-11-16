@@ -16,7 +16,8 @@ export type User = {
   twoFactorEnabled: boolean;
   twoFactorCode?: string; // HMAC of the emailed code
   twoFactorExpires?: Date;
-  twoFactorAttempts?: number;
+  twoFactorAttempts?: number; // guesses counted in the current window
+  twoFactorWindowStart?: Date; // when the current 15-minute guess window opened
   twoFactorNextCodeAt?: Date | null;
   createdAt: Date;
 };
@@ -40,6 +41,7 @@ const userSchema = new Schema<User>(
     twoFactorCode: { type: String, select: false },
     twoFactorExpires: { type: Date, select: false },
     twoFactorAttempts: { type: Number, select: false },
+    twoFactorWindowStart: { type: Date, select: false },
     twoFactorNextCodeAt: { type: Date, select: false },
   },
   { timestamps: { createdAt: true, updatedAt: false } }

@@ -1,6 +1,6 @@
 # Backend Progress
 
-Last updated: 2026-11-13
+Last updated: 2026-11-16
 
 Nepali grocery e-commerce API. Stack: Express 5, TypeScript, MongoDB Atlas (Mongoose), Zod, Envalid, Pino.
 
@@ -18,14 +18,24 @@ Real password reset and 2FA emails were tested on 2026-11-07 with a test account
 
 Phase 6 (admin dashboard) started on 2026-11-13. The backend part, `GET /admin/stats` (FR-18), is merged in [PR #10](https://github.com/biswash12-stac/malta-project/pull/10), with automated tests only. All 147 tests passed on 2026-11-13.
 
+PRs #11 (Jest and Supertest), #12 (checkout idempotency, readiness probe, API version header) and #13 (upload hardening and CI) are merged; the last merge is `76455f4`.
+
+The upload-ticket lifecycle, the development seed, the security fixes S-01, S-03, S-04, S-05, S-07 and S-09, and the code-review fixes R-1, R-2, R-3, R-4, R-5, R-6, R-9, R-10, R-11 and R-14 are committed on `feature/lifecycle-and-seed` as `34e2afb` (2026-11-15), which is pushed and in PR #14 (not merged; see below). S-02, S-06 and S-08 are still open. R-7 was fixed, then superseded by R-11. R-8, R-12 and R-13 were decisions with no code change (`documentV1/SECURITY_AUDIT.md` §9a).
+
+A production-readiness audit on 2026-11-15 found no Critical or High backend issues; its findings and their status are in `documentV1/SECURITY_AUDIT.md` §11. A-01 (2FA guess limit) is implemented, tested and committed as `e18e27a` (2026-11-16), on top of `34e2afb`, and is in PR #14 (not merged). Its final-review follow-ups were finished on 2026-11-16. Only the shared test-client timeout remains, as a separate task (see Still To Do → A-01 follow-up).
+
+[PR #14](https://github.com/biswash12-stac/malta-project/pull/14) (`feature/lifecycle-and-seed` into `main`) was opened on 2026-11-16 and is **open, not merged**; nothing is deployed. It holds `34e2afb`, `e18e27a`, `97be2be` (docs) and `deba14c` (Jest fixture fix). The first CI run (`43913147795`, on `97be2be`) failed: `tests/jest/production-cookies.test.ts` switches to `NODE_ENV=production` but didn't set `SMTP_PORT`, which production requires. Locally `backend/.env` supplied it; CI has no `.env`, so envalid exited and the suite couldn't run. `deba14c` adds `SMTP_PORT: "587"` to that test. CI run `43916518938` on `deba14c` passed: backend type check, node:test 235/235, Jest 6/6 suites and 32/32 tests; frontend lint and build. PR checks pass. Merging is a separate decision. The security findings and launch tasks listed under Still To Do are still open.
+
 A whole-repo audit found 20 issues. Findings 2, 3, 4, 8 and 9 are done, and the other 15 are still open (see Still To Do).
+
+A second security audit on 2026-11-13 found no Critical or High issues in the backend. Production dependencies in both apps have 0 known advisories, and no secrets are in Git or its history. Tests were added for three behaviours that weren't proven yet: registration ignores `role`, `$` operators in JSON bodies return a 400, and production cookies are Secure. The open items are frontend and deployment work, listed under Before launch and in `FRONTEND_PROGRESS.md`.
 
 The security audit's code fixes are done. Finding 9 (production secrets) is a launch task. Finding 11 (registration reveals taken emails) still waits for email verification at registration.
 
 ## What Is Built
 
 ### Foundation
-- Express app with helmet, CORS for one frontend address, cookie parsing, a 32 KB body limit and request logging
+- Express app with helmet, CORS for one frontend address (`CLIENT_URL`, with credentials, and only the `Content-Type`, `Authorization` and `Idempotency-Key` request headers), cookie parsing, a 32 KB body limit and request logging
 - MongoDB connection, with a clean shutdown when the server stops. The server won't start if an index can't be built
 - Environment checks at startup: the server won't start if a required value is missing or invalid
 - One error handler for the whole API, using the standard error format
@@ -38,11 +48,11 @@ The security audit's code fixes are done. Finding 9 (production secrets) is a la
 - Two httpOnly cookies: `access_token` (15 minutes) and `refresh_token` (7 days, stored only as a hash). Tokens never appear in response bodies
 - `POST /auth/refresh` replaces the refresh token each time. Reusing a replaced token after 10 seconds ends all of that user's sessions
 - Forgot and reset password: emailed link, valid 30 minutes, works once, ends all sessions. The response doesn't reveal whether the email has an account
-- Email 2FA: 6-digit code valid 10 minutes, stored as an HMAC. Five wrong tries cancel it and hold back new codes for 15 minutes. It also applies to Google login
+- Email 2FA: 6-digit code valid 10 minutes, stored as an HMAC. Guesses are limited per account, not per code: at most 5 in a fixed 15-minute window, and a new code doesn't reset them. The 5th wrong guess cancels the code and holds back new codes for 15 minutes (A-01). It also applies to Google login
 - Google login with `POST /auth/google`: creates a customer for a new email and links existing accounts safely
 - Nodemailer mailer: uses SMTP when set, and logs emails in development when it isn't
 - `requireAuth` and `requireRole("admin")` middleware
-- 20 register and login attempts per 15 minutes per IP address
+- 20 attempts per 15 minutes per IP address, shared by register, login, Google login, password reset and the five 2FA routes (one counter per IP, not one per route)
 - 10 failed logins per 15 minutes per account
 - 300 requests per minute per IP address across the API, with the health check excluded
 - Common passwords and single repeated characters are rejected at registration
@@ -67,9 +77,12 @@ The security audit's code fixes are done. Finding 9 (production secrets) is a la
 - Hiding a category hides its products from the public list, detail, search and filters
 - Offers store the lowest price of the previous 30 days as `priorLowestPrice`, and must be below it
 - Signed Cloudinary uploads: the backend signs, the browser uploads directly, and the API secret never leaves the server
-- Image size and format are enforced on product save: each image no product uses yet is looked up in Cloudinary (Admin API, Basic auth). It must be 5 MB or less (`UPLOAD_MAX_BYTES`) and stored as JPG, PNG or WebP. Otherwise the save returns a 400 with `details.images`, and the file is deleted. If Cloudinary can't be reached or sends a record without a numeric `bytes` and a text `format`, it returns a 503 `IMAGE_CHECK_UNAVAILABLE` and deletes nothing. Editing a product that doesn't exist returns 404 before any image is checked. The signature response also gives the browser `maxFileBytes` and `allowedMimeTypes`. 12 upload tests were added for this on 2026-11-13, so `uploads` went from 10 to 22, all passing locally
+- Image size and format are enforced on product save: each image no product uses yet is looked up in Cloudinary (Admin API, Basic auth). It must be 5 MB or less (`UPLOAD_MAX_BYTES`) and stored as JPG, PNG or WebP. Otherwise the save returns a 400 with `details.images`. Since R-11 (2026-11-14), a rejected file isn't deleted during the request: it's queued for the cleanup job, which deletes it later under its claim and in-use rules. An image that isn't found is only reported. If Cloudinary can't be reached or sends a record without a numeric `bytes` and a text `format`, it returns a 503 `IMAGE_CHECK_UNAVAILABLE` and queues nothing. Editing a product that doesn't exist returns 404 before any image is checked. The signature response also gives the browser `maxFileBytes` and `allowedMimeTypes`. 12 upload tests were added for this on 2026-11-13, so `uploads` went from 10 to 22, all passing locally
+- Upload tickets (2026-11-13): `POST /admin/uploads/signature` now signs one file at a server-chosen `public_id` (`products/<uuid>`) and records an `UploadTicket`. Saving a product with that image removed the ticket until R-11 (2026-11-14); now a save only claims it, and the cleanup job settles it
+- Abandoned upload cleanup: runs in the API process a minute after start and then hourly, and `npm run cleanup:uploads` runs it once. It deletes only ticketed files left unattached for over 24 hours and never an image a product uses. A MongoDB lease lock prevents overlapping runs; a failed delete keeps its ticket and is retried
+- Development catalogue seed: `npm run seed:dev` inserts 14 categories and 100 placeholder products (prices in cents, no images, no ratings). Insert-only by slug, never updates or deletes, and refuses to run in production. Run on the development database on 2026-11-13: 14 categories and 100 products created; a second run skipped all of them
 - Product images must be in this store's Cloudinary account and `products` folder
-- Replaced images are deleted from Cloudinary in the background, unless another product uses them
+- Images an edit removes are queued as removal tickets and deleted by the cleanup job after a 15-minute grace period, unless a product uses them by then (R-11, 2026-11-14). Nothing is deleted during the edit itself
 
 ### Orders
 - Login required to order. Guests get a 401 and keep their cart in the browser
@@ -93,20 +106,29 @@ The security audit's code fixes are done. Finding 9 (production secrets) is a la
 - The three numbers come from three queries run in parallel. Any query param returns a 400
 
 ### Tests and tooling
-- 165 automated tests: `orders` (30), `uploads` (22), `products` (15), `two-factor` (14), `startup-and-email` (3), `auth` (12), `auth-tokens` (10), `catalog-models` (10), `google` (10), `categories` (9), `password-reset` (9), `sessions` (9), `validate` (7) and `hardening` (5). Database tests use a temporary in-memory MongoDB
+- 235 automated tests: `orders` (30), `uploads` (39), `upload-cleanup` (31), `dev-seed` (4), `products` (15), `two-factor` (32), `startup-and-email` (3), `auth` (12), `auth-tokens` (10), `catalog-models` (10), `google` (10), `categories` (9), `password-reset` (9), `sessions` (9), `validate` (7) and `hardening` (5). Database tests use a temporary in-memory MongoDB
 - The catalog tests fail if a list query scans the whole collection or sorts in memory
-- Jest and Supertest, run by `npm run test:jest` from `tests/jest/`, with 7 tests: health, readiness, the version header, malformed JSON and an empty category list. `npm test` still runs the node:test suite only
+- Test-harness limit: the four 2FA race tests hold requests open on purpose and have 30-second timeouts. A test that times out fails, and its pause hook and fake clock are removed. But if a request it holds has stalled, the test process may stay alive until it is stopped, because the shared test client (`tests/auth-test-app.ts`) can't cancel a request yet. Giving its `request()` an `AbortSignal` would fix that.
+- Jest and Supertest, run by `npm run test:jest` from `tests/jest/`, with 32 tests:
+  - health, readiness, the version header, CORS, malformed JSON and an empty category list
+  - a `role` sent at registration, `$` operators in JSON bodies, and Secure cookies in production
+  - `request-security` (9): no-store caching, query-free logs, the Origin policy
+  - `tampering` (10): forged roles, cookies and tokens, other customers' orders, admin routes as a customer, forged checkout fields, no token in any response body
+
+  `npm test` still runs the node:test suite only
 - Jest tests get blank SMTP, Cloudinary and Google values, and a database address that can't connect, before the app loads. Database tests use `startTestDb()` from `tests/jest/helpers/test-db.ts`
 - Prettier formatting
-- Backend README (local only, not on GitHub)
+- Backend README (`backend/README.md`): committed on `feature/lifecycle-and-seed` in `34e2afb` (PR #14), not yet merged into `main`
 
 ## API So Far
+
+The full verified contract (request fields, errors, rate limits, data lifecycle) is in `backend/API.md`.
 
 All routes are under `/api/v1`.
 
 | Route | Body | Success `data` |
 | --- | --- | --- |
-| `GET /health` | none | `{ status, uptime }` |
+| `GET /health` | none | `{ status }` |
 | `GET /health/ready` | none | `{ status: "ready" }`, or 503 `DATABASE_UNAVAILABLE` |
 | `POST /auth/register` | `username`, `email`, `password` (8+ characters) | `{ user }` (201) |
 | `POST /auth/login` | `email`, `password` | `{ user }` or `{ requires2FA: true }` |
@@ -133,7 +155,7 @@ All routes are under `/api/v1`.
 | `DELETE /products/:id` (admin) | none | `null` |
 | `GET /admin/products?page=&limit=&q=&category=&isActive=` (admin) | none | `{ items, pagination }` |
 | `GET /admin/products/:id` (admin) | none | `{ product }` |
-| `POST /admin/uploads/signature` (admin) | none | `{ uploadUrl, apiKey, timestamp, folder, allowedFormats, signature }` |
+| `POST /admin/uploads/signature` (admin) | none | `{ uploadUrl, apiKey, timestamp, publicId, allowedFormats, allowedMimeTypes, maxFileBytes, signature }`: one file, at the server-chosen `publicId` |
 | `POST /orders` (login) | `items[]` of `{ productId, qty }`, `delivery` of `{ name, phone, address, locality, note? }`. Optional `Idempotency-Key` header | `{ order }` (201), the same order again for a repeated key |
 | `GET /orders/mine?page=&limit=` (login) | none | `{ items, pagination }` |
 | `GET /orders/:id` (login, own orders only) | none | `{ order }` |
@@ -154,6 +176,40 @@ Error: `{ success: false, error: { code, message, details } }`
 
 ## Problems Fixed
 
+- Security, 2026-11-13 (`documentV1/SECURITY_AUDIT.md`):
+  - S-01: API responses could be cached by browsers or proxies. Every response is now `Cache-Control: no-store`
+  - S-03: image ids with `..` could point outside `products/`. Ids are now `products/<one safe name>`, and the url must be exactly that file
+  - S-05: request and error logs included query strings, which held phone numbers. They now log the path only
+  - S-04: other origins could send body-less POSTs. Writes with a foreign or `null` `Origin` now get a 403
+  - S-07: upload signatures had no own rate limit. They now allow 60 per 15 minutes per IP
+  - S-09: `/health` revealed uptime. It now returns only `status`
+- Code review fixes, 2026-11-14:
+  - an upload signature could re-upload over an image already checked. `overwrite=false` is now signed
+  - an unparseable image URL returned a 500. It now returns a 400
+  - added the missing `images.publicId` index
+  - the cleanup lock now outlasts a worst-case run
+  - a failure removing tickets after a save no longer fails the request
+  - CORS and the Origin check share one `CLIENT_ORIGIN`
+  - the seed's expected count now comes from its data
+- Upload cleanup race and retries, 2026-11-14:
+  - R-3: a product save already past its image check could lose the image to the hourly cleanup. Saves now claim their images' tickets first, the cleanup claims each ticket atomically, and a save meeting a ticket being deleted gets 409 `UPLOAD_EXPIRED`
+  - R-5: a delete that kept failing blocked newer tickets. Failures now back off (1 h doubling to 24 h) and are skipped until due
+  - the lock is now renewed after every file, and a run that loses it stops
+  - a database error on one ticket no longer aborts the whole run
+  - the "free or expired lease" rule now lives in one place; ticket claim and release are `upload.service` helpers
+  - an edit that doesn't send images no longer writes to tickets
+- R-11, 2026-11-14 (after code review): removing an image in an edit deleted it straight away, outside the ticket system, so a product being saved at that moment with the same image could keep a broken link. Removals are now queued as tickets before the save and deleted by the cleanup job under the same claim, recheck and retry rules. Images already on products get no tickets (no backfill)
+  - files rejected by the size or format check are queued the same way, so nothing is deleted outside the cleanup any more
+  - tickets are no longer deleted when a save succeeds. Only the cleanup settles them, after checking whether a product uses the image
+  - a stale edit of a product's images (Mongoose `VersionError`) now gets 409 `CONFLICT` instead of 500
+  - a successful Cloudinary delete followed by a database error is no longer backed off as a Cloudinary failure
+  - final review, defect 1 (2026-11-14): a removal queued while a cleanup worker held that image's ticket could be deleted by the worker's older "still in use" decision, leaving the file untracked. Tickets now carry a `rev` that `queueImageRemoval` increments, and the worker only writes while `rev` is unchanged. Older tickets without `rev` still match
+    - code review of that fix: a worker whose write misses now gives its claim back (when it found the image in use, or skipped the delete), so saves of the image aren't refused for up to 10 minutes. After a failed delete it keeps the claim instead (see below). A superseded ticket no longer counts as `inUse`, and a re-queued removal's schedule isn't overwritten by a failed-delete back-off. The ticket model comment is corrected
+    - final hardening (2026-11-14): right before deleting, the worker re-takes its claim in one atomic write, which succeeds only if the claim never lapsed, no save has claimed the image and no edit re-queued it. A worker that stalls after its in-use check now stops instead of deleting. `queueImageRemoval` keeps a later retry back-off instead of resetting it to 15 minutes (`$max`)
+    - a failed delete now keeps the worker's claim until it expires (10 minutes) instead of releasing it, because after a timeout or an unreadable answer Cloudinary may still carry the delete out. Saves of that file get 409 meanwhile; retries are unaffected (back-off starts at 1 hour)
+- R-14, 2026-11-15 (test first): `claimUploadTickets` claims, then checks, in two calls. A worker that gave its claim back between them (after its own claim lapsed) left the ticket with neither a worker claim nor a save claim, and the save went ahead, so a second worker could delete the image before the product was stored. The check now refuses the save (409 `UPLOAD_EXPIRED`) unless every ticket holds a live save claim and no live worker claim. The regression test failed with "Missing expected rejection" before the fix and passes after it
+  - three more cleanup tests, each checked against a copy with its guard disabled: the "claim still in the future" part of the pre-delete check on its own (the only one of the 31 cleanup tests that catches its removal); a failed delete's retry only falls due after the renewed claim expires; and the pre-delete check really extends the claim, so a save past the original expiry is still refused
+  - final `/code-review` (2026-11-15): no new data-integrity defect. The comment above `assertImagesAllowed` is corrected (rejected files are queued, not deleted). A reported concurrent-edit image loss was disproved: an unchanged `images` list isn't written, and a changed one from a stale copy gets `VersionError` (409). Remaining items are in Known Limits and `SECURITY_AUDIT.md` §9a
 - The server claimed to be running when its port was already taken. It now stops with an error.
 - Broken JSON and oversized requests returned 500. They now return 400 and 413. Since 2026-11-13 a Jest test also checks the standard error envelope for broken JSON.
 - A double click or network retry on checkout placed two orders. A repeated `Idempotency-Key` now returns the first order.
@@ -169,12 +225,14 @@ Error: `{ success: false, error: { code, message, details } }`
 - Security: the seed accepted short admin passwords. It now requires 12 or more characters.
 - Security: only login and register were rate limited. The whole API now has a general limit.
 - Security: passwords could be guessed from many IP addresses. Each account now has its own limit on failed logins.
+- Security (A-01, 2026-11-15, production-readiness audit): logging in again a minute later sent a new 2FA code with its wrong-guess count reset, so someone with the password got about 4 guesses a minute instead of 5 per 15-minute lock. Guesses are now limited per account: at most 5 in a fixed 15-minute window (new `twoFactorWindowStart` field) that opens at the first counted guess. Each guess is counted in one atomic write; the lock after a 5th wrong guess and the reset after a correct one are separate writes. A new code doesn't touch the count or the window; only the window ending or a correct code starts it again. No code is sent while the window's 5 guesses are used up, so a lock that was never written (a crash between counting and locking) acts as a lock and ends with the window instead of sending codes that can't be used. The lock written by a fifth wrong guess now applies only while that guess's code is still stored, so it can't cancel a code sent after the window ended, or lock an owner whose correct guess logged in at the same moment. 18 regression tests: the lock and resend, the fixed window (moved on with a faked clock, only `Date`), its exact 15-minute boundary, a window ending before the lock, recovery after the window and after the lock, the reset after a correct code, the 2FA-on and 2FA-off flows, the stored count, an interrupted lock, an account from before the window field, guesses at an expired code, parallel wrong guesses either side of a new code, and four races between a guess and a login or another guess. Existing accounts need no migration: a missing window counts as ended. Verified on 2026-11-15 (235 node:test and 32 Jest tests, repeated 2FA runs, mutation checks; the final review found no application defect). Review follow-ups on 2026-11-16 made three tests stricter: the owner race checks the cleared count and window, the parallel bursts check the count, and the expired code checks the exact error. Each new check was shown to fail against a broken guard, and the source was then restored byte for byte. Re-verified on 2026-11-16: 235 node:test and 32 Jest tests, the 2FA file 3 times in a row, tsc, Prettier, build, and `npm audit --omit=dev` (0). Committed as `e18e27a`, in PR #14 (not merged); CI passed on the PR on 2026-11-16
 - Security: `12345678` and `password` were accepted. Common passwords are now rejected.
 - Security: a server missing `NODE_ENV` ran with production protections off. It now refuses to start.
 - Security: the API read HTML form posts, which any site can send. It now reads JSON only.
 - A failed unique index was silent, which let three accounts share one email. The server now refuses to start and logs why.
 - A mail server that stopped answering left 2FA login waiting. Email now times out after 10 to 20 seconds, and login returns a 503.
 - The 10 KB body limit rejected long Nepali descriptions. It's now 32 KB, which fits the largest valid product.
+- CI (2026-11-16, PR #14): the production-cookies Jest test didn't set `SMTP_PORT` and passed locally only because `backend/.env` supplied it, so it failed in CI, which has no `.env`. Fixed in `deba14c`, then checked with `.env` blocked (`DOTENV_CONFIG_PATH=/nonexistent/.env npm run test:jest`: 6/6 suites, 32/32 tests). Jest still reads `backend/.env` for variables the tests don't set, so a local pass can hide a missing value.
 
 ## Decisions
 
@@ -219,8 +277,17 @@ Error: `{ success: false, error: { code, message, details } }`
 | The order number counter runs outside the checkout transaction | Parallel orders don't conflict on one row. A failed checkout can leave a gap in the numbers |
 | Order items also store `unitSnapshot`, and `nameSnapshot` is the English name | The unit says what size was bought and can change later |
 | Jest and Supertest added alongside the node:test suite, not replacing it | The developer's choice. The 147 existing tests keep working, and new tests can use either runner |
+| CORS lists its allowed request headers: `Content-Type`, `Authorization` and `Idempotency-Key` | Without a list, the `cors` package echoes back any header the browser asks for. `Authorization` is unused, because login uses cookies, but it's listed at the developer's request |
+| Writes with an `Origin` header must come from `CLIENT_URL`; writes without one are allowed | CSRF defence on top of SameSite and JSON-only bodies. Browsers always send `Origin` on writes, and clients without one (curl, servers) can't carry a user's cookies |
+| Every API response is `Cache-Control: no-store` | Responses can hold personal or admin data, and the API serves nothing worth caching |
 | Image size and format are checked on product save through Cloudinary's Admin API, not in the signature | Cloudinary's docs say signatures and upload presets can't limit file size. Checking the stored file uses Cloudinary's own size and format, not the file name |
+| Uploads are signed per file at a server-chosen `public_id`, with an `UploadTicket` | Only then can the backend tell which Cloudinary files it issued and which were abandoned. A broad folder sweep could delete client images |
+| Upload tickets have no TTL index; the cleanup job deletes them after the file | A TTL index could remove a ticket before its file, losing track of the file for good |
+| The cleanup runs inside the API process with a MongoDB lease lock | No new dependency or extra service. The lock keeps runs from overlapping even with several instances |
+| Images removed in an edit are queued as tickets, not deleted during the edit | The cleanup's claim and in-use recheck then cover them too, deletes are retried, and a crash can't lose a deletion. No tickets are created for images that are only attached, so there's no backfill or guessed ownership |
+| The development seed has no images, and inserts only | The validator accepts only real images in our Cloudinary account, and invented URLs would be misleading. Inserting only means it can never overwrite or delete real data |
 | `.gitignore` ignores `.env*` except `.env.example` | Any new `.env.something` file is safe by default |
+| Frontend progress is tracked in `FRONTEND_PROGRESS.md` at the repo root | The backend developer records the frontend's status there without editing `frontend/` |
 | Jest strips TypeScript with SWC, not ts-jest | ts-jest needs TypeScript below 7 |
 | `test:jest` runs Node with `--experimental-vm-modules` | MongoDB driver 7.8 loads `os` with a dynamic `import()`, which Jest blocks otherwise, so every connection failed |
 | The `Idempotency-Key` is saved inside the checkout transaction, with a unique index on user and key | Checking for the key before creating the order would still let two requests at the same moment both get through. The unique index makes the second one roll back, including its stock change |
@@ -230,6 +297,31 @@ Error: `{ success: false, error: { code, message, details } }`
 | Stats live in the orders module, mounted at `/admin/stats` | They only read orders, so a separate module would add files without adding anything |
 
 ## Still To Do
+
+### A-01 follow-up (final review, 2026-11-15)
+None of these are application defects. All are done and committed in `e18e27a`, except the separate test-harness task.
+- [x] The owner-race test now also checks that the correct code cleared the count and the window, and that the next login gets a working code: done 2026-11-16
+- [x] Known Limits overstated how the owner is alerted after a successful verification: corrected 2026-11-16
+- [x] The parallel-bursts test checks the count (4) after its first burst, so lost updates can't pass: done 2026-11-16
+- [x] The expired-code test sends the right but expired code and checks the exact error (`VALIDATION_ERROR`, "Invalid or expired code"): done 2026-11-16
+- [ ] Separate task: a stalled request in a race test can keep the test process alive. The shared test client (`tests/auth-test-app.ts`) needs request cancellation, and CI needs `timeout-minutes`
+- [x] The owner-race abort listener uses `{ once: true }`, and its comment says node:test aborts the signal whenever a test ends (checked on Node 22.23.5): done 2026-11-16
+- [x] The over-width A-01 comments (test line 603, service line 20) were rewrapped to 100 characters: done 2026-11-16
+- [x] The Known Limits reference to R-13 didn't say where R-13 is defined: corrected 2026-11-16
+
+### Production-readiness audit follow-ups (2026-11-15)
+Findings, plans and status are in `documentV1/SECURITY_AUDIT.md` §11. Nothing below is started.
+- [ ] A-07: the development seed must confirm the target database (plan ready, needs approval)
+- [ ] A-04: delivery-date and payment updates in a transaction (plan ready, needs approval)
+- [ ] 2FA API feedback: `codeSent` and `retryAfterSeconds` on login, Google login and the 2FA on/off requests. The plan is ready, but the JSON needs agreeing with the frontend developer first
+- [ ] A-02, A-03, A-05, A-06, A-08: small logging, shutdown and configuration items
+
+### Decisions needed from the client
+- [ ] At most two active unpaid orders per customer? Today only checkout's 10 orders per 15 minutes per IP limits how much stock unpaid orders can hold. Not implemented
+- [ ] Newsletter: the frontend footer has a sign-up field, but the backend has no endpoint and stores no consent. Before collecting emails, decide whether to offer it and how consent is recorded (GDPR)
+- [ ] GDPR retention: orders keep names, phone numbers and addresses with no time limit, and there's no data export or deletion. A retention period and process are needed (see Legal checks below)
+- [ ] Google sign-in: ship it after a real test, or switch it off. `GOOGLE_CLIENT_ID` is required in production today even if it isn't used (A-08)
+- [ ] Bulk catalogue import: on 2026-11-15 the client asked to load about 1,000 products. A spreadsheet (Excel or CSV) was recommended over PDF. This is a future requirement and nothing is designed or built yet. The development seed (`npm run seed:dev`) is for placeholder data only, not client imports
 
 ### Auth upgrade
 - [ ] Create a free Google OAuth client ID and set `GOOGLE_CLIENT_ID` in `.env`
@@ -243,9 +335,10 @@ Error: `{ success: false, error: { code, message, details } }`
 
 ### Whole-repo audit (still open)
 - [ ] Must fix, frontend: fake testimonials (1), made-up contact details and offers (5), blank admin pages (6), no login link or phone menu (7)
+- [x] No Secure cookie test (11): `tests/jest/production-cookies.test.ts` added on 2026-11-13
 - [x] `.gitignore` misses `.env.production` (8): `.env.production` and `.env.test` added on 2026-11-13
 - [x] No CI (10): `.github/workflows/ci.yml` added on 2026-11-13. It runs the backend type check, `npm test`, `npm run test:jest`, and the frontend lint and build, with no secrets and with actions pinned to commit SHAs. Each command passed locally on 2026-11-13. The workflow itself hasn't run on GitHub yet
-- [ ] Should fix, backend and repo: no Secure cookie test (11), `ADMIN_PASSWORD` and the `test` database in `.env` (12), small leftovers (17)
+- [ ] Should fix, backend and repo: `ADMIN_PASSWORD` and the `test` database in `.env` (12), small leftovers (17)
 - [ ] Should fix, frontend: dead links (13), product shape doesn't match the API (14), ESLint error (15), unplanned placeholder features (16)
 - [ ] Nice to have: reject a trailing slash in `CLIENT_URL` (18), return 409 for parallel product edits (19), fix drifted docs (20)
 
@@ -254,7 +347,9 @@ Error: `{ success: false, error: { code, message, details } }`
 
 ### Phase 4
 - [x] Merge PR #8
-- [ ] Temporary script to seed 100 placeholder products (the developer will provide it)
+- [x] Seed 100 placeholder products: `npm run seed:dev`, run on the development database on 2026-11-13
+- [ ] Have a native speaker check the Nepali product names in `src/scripts/dev-catalog/catalog-data.ts`
+- [ ] Before selling alcohol or energy drinks: confirm Malta's age-verification and labelling rules. The product model has no age-restriction field yet
 
 ### Before later phases
 - [x] Phase 6: build `GET /admin/stats` (FR-18)
@@ -273,13 +368,35 @@ Error: `{ success: false, error: { code, message, details } }`
 - [ ] Set `NODE_ENV=production`, `MONGODB_URI`, a new `JWT_SECRET`, a new `TWO_FACTOR_SECRET`, `CLIENT_URL`, `COOKIE_DOMAIN`, `TRUST_PROXY_HOPS`, `GOOGLE_CLIENT_ID`, `SMTP_*`, `MAIL_FROM` and `CLOUDINARY_*` on the server
 - [ ] Add the live site's address to the Google OAuth client's allowed origins
 - [ ] Allow the server's IP address in Atlas Network Access
+- [ ] Production operations (planned, not started): automatic restarts, monitoring and alerts, database backups with a tested restore, deployment rollback, DNS recovery, customer-facing outage handling and incident response. The checklist is in `documentV1/architecture.md` §8 → Production operations
 
 ## Known Limits
 
 - `shopRating` is typed in by the admin and doesn't come from customer reviews. The frontend must label it as the shop's own rating, with no review counts.
-- An image uploaded but never saved to a product stays in Cloudinary, because the backend doesn't know about it. It only costs storage.
-- Cloudinary can't limit file size at upload time, because neither a signature nor an upload preset supports it. So an oversized file is stored until the product save rejects and deletes it, and a file uploaded but never saved still stays, as before. Cloudinary's own plan limit is the hard upper bound.
-- Removing an image from one product while another product adds the same image at the same moment can still delete it. The edit checks that no other product uses the image, then deletes it in the background, and a save that lands in between isn't seen. This needs two admins editing a shared image within milliseconds. If the shop gets several admins, delete removed images after a delay, checking again first.
+- An image uploaded but never saved to a product is deleted by the cleanup job after 24 hours. Files uploaded before upload tickets existed (2026-11-13) have no ticket, so they are never cleaned up automatically.
+- Cloudinary can't limit file size at upload time, because neither a signature nor an upload preset supports it. So an oversized file is stored until the product save rejects it and the cleanup job deletes it from its removal ticket, and a file uploaded but never saved still stays, as before. Cloudinary's own plan limit is the hard upper bound.
+- A worker that stalls more than 10 minutes *after* its last claim check, while its delete request is already on its way to Cloudinary, can still delete a file a save claimed in that window. Nothing can be checked between sending the request and Cloudinary acting on it, and Cloudinary has no conditional delete. A request that times out on our side may still be carried out by Cloudinary later; the claim is kept for 10 minutes after a failure to cover that, but a delete Cloudinary carries out even later is not covered.
+- A removed image waits 15 minutes before it can be deleted, on the assumption that no product save runs longer than that. Saves take seconds, because the Cloudinary check times out after 10 seconds.
+- A ticket whose file can't be deleted is retried daily for as long as it fails.
+- Parallel edits of a product's price or stock can still overwrite each other, because only array fields such as `images` are versioned (audit item 19). A stale edit of `images` is refused with 409.
+- A save is refused with 409 `UPLOAD_EXPIRED` while a cleanup worker holds that image's claim, even when the image is already in use: for milliseconds while the worker checks the image, and for up to 10 minutes after a failed Cloudinary delete. The second case is deliberate, because the delete may still go through.
+- Since the R-14 fix (2026-11-15), a save is also refused with 409 `UPLOAD_EXPIRED` if a ticket for one of its images is created in the milliseconds between its claim and its check, for example by an edit removing the same image from another product at that moment. Nothing is lost, and retrying the save works. Accepted as a rare edge case rather than weakening the R-14 guarantee.
+- The cleanup only runs when Cloudinary credentials are set. Without them, images that edits remove are still queued as tickets, which build up until credentials are added; the first run then works through them, still skipping any image a product uses.
+- A worker stalled past the job lock's 10-minute lease can run alongside a newer worker. Per-ticket claims still stop both from handling the same ticket.
+- The cleanup's claim query uses the `createdAt` index only. Fine at this shop's size; add a compound index if tickets ever number in the tens of thousands.
+- Ticket claims compare timestamps written by whichever server set them. With several API instances, their clocks must agree to within a few minutes (NTP), or one instance could treat another's claim as expired. Today there's one instance. It never blocks other tickets, but nothing alerts on it except the `partial` status in the logs.
+- 2FA guesses are limited to 5 per account in a fixed 15-minute window (A-01). Accepted edge behaviour:
+  - Bursts at a window boundary. This is an edge case, not the normal rate: normally at most 5 guesses are counted per 15-minute window, and the 5th wrong one locks new codes for 15 minutes. A window opens at its first counted guess, so only its 2nd to 5th guesses can fall just before it ends.
+    - Within seconds of a boundary, without a race: up to 8 guesses. That's the 2nd to 4th of the earlier window (no lock yet) and 5 at the start of the next.
+    - Within seconds of a boundary, with a race: up to 9. A 5th guess is counted just before the window ends, and its lock hasn't taken effect when the next window opens. Either its lock write is delayed (more guesses on the same code count in the new window), or a new code replaces the guessed one first, and then that lock isn't written at all. The lock only applies while the guessed code is still stored, and a new code can only be sent once the window has ended.
+    - Counting the guess that opened the earlier window: up to 9 (no race) or 10 (race) within roughly 15 minutes.
+    - Each window still counts at most 5, so over time the rate stays at about 5 guesses per 15 minutes.
+  - Someone who has the password shares the owner's limit and can use it up, so the owner may get fewer tries or a lock. That is the same trade-off as the failed-login lockout; the fix is a new password.
+  - A correct code starts the count and the window again. That covers the owner finishing a 2FA login, or turning 2FA on or off. So a mistyped code doesn't count against the owner's next login. The trade-off: someone who also has the password isn't held to 5 guesses per 15 minutes across the owner's successful verifications. After each one, that person can get a fresh window of up to 5 guesses. It only happens as often as the owner verifies, each guess has a 1-in-a-million chance, and a new password ends it. The owner isn't always alerted: someone who logs in during the owner's own 60-second resend wait guesses the owner's current code, and no extra email is sent.
+  - While codes are held back (resend wait, lock or used-up guesses), login still answers `requires2FA` and the 2FA-on/off requests still say a code was emailed, but no email is sent. The API doesn't yet say why (a separate, frontend-compatible change is proposed).
+  - If sending the email fails, the handler clears `twoFactorNextCodeAt` without checking it, which can shorten a lock written meanwhile; the window still allows at most 5 guesses per 15 minutes. Behaviour unchanged on purpose.
+  - Accounts that were mid-2FA when the window field was deployed get one fresh window at their next guess.
+  - Windows and locks use each server's clock, like the ticket claims above (R-13 in `documentV1/SECURITY_AUDIT.md`).
 - Password reset and 2FA codes both go to the same inbox, so someone who controls that email can pass both. Authenticator apps would be stronger.
 - Logging out ends the user's sessions on every device.
 - Password reset links are logged by the frontend's server if it logs URLs, and the reset page should send no referrer.

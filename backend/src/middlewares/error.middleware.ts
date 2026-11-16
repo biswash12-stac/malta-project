@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { ZodError } from "zod";
 import mongoose from "mongoose";
 import { logger } from "../utils/logger.js";
+import { pathWithoutQuery } from "../utils/request-log.js";
 import { AppError } from "../utils/app-error.js";
 import type { ApiError } from "../utils/api-response.js";
 
@@ -70,6 +71,19 @@ export const errorHandler = (
     return;
   }
 
+  // Someone saved the same document's array (e.g. product images) after this request read it.
+  // Mongoose versions arrays, so the stale save fails instead of overwriting newer data.
+  if (err instanceof mongoose.Error.VersionError) {
+    res.status(409).json({
+      success: false,
+      error: {
+        code: "CONFLICT",
+        message: "This was changed by someone else. Reload it and try again",
+      },
+    });
+    return;
+  }
+
   // mongoose duplicate key (unique index violation)
   if (
     typeof err === "object" &&
@@ -99,7 +113,7 @@ export const errorHandler = (
   const stack = err instanceof Error ? err.stack : undefined;
   logger.error({
     msg: "Unhandled error",
-    path: req.originalUrl,
+    path: pathWithoutQuery(req.originalUrl),
     method: req.method,
     message,
     stack,
