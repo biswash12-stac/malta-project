@@ -1,6 +1,6 @@
 # Security Implementation Plan
 
-Date: 2026-11-13. It's based on `SECURITY_AUDIT.md` (findings S-01 to S-09, F-01 to F-03, N-01). Each phase needs your approval. **Status (2026-11-14):** S-01, S-03, S-04, S-05, S-07, S-09 and the tampering suite are implemented and tested, but not committed. S-02, S-06, S-08, F-01, F-02 and F-03 are still open. `SECURITY_AUDIT.md` §10 is the current record.
+Date: 2026-11-13. It's based on `SECURITY_AUDIT.md` (findings S-01 to S-09, F-01 to F-03, N-01). Each phase needs your approval. **Status (2026-11-16):** S-01, S-03, S-04, S-05, S-07, S-09 and the tampering suite are implemented, tested and committed locally in `34e2afb` (not pushed or merged). S-02, S-06, S-08, F-01, F-02 and F-03 are still open. `SECURITY_AUDIT.md` §10 is the current record. The 2026-11-15 production-readiness audit (A-01 to A-08) is tracked in `SECURITY_AUDIT.md` §11, and the production operations checklist is in `architecture.md` §8.
 
 ## How each change is made
 

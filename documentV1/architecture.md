@@ -53,16 +53,16 @@ Define a `PaymentProvider` interface: `createPayment(order)`, `verifyPayment(pay
 - Frontend: Vercel
 - Backend: Render / Railway / small VPS
 - Database: MongoDB Atlas
-- Images: Cloudinary, with signed direct uploads. The backend signs each upload for the `products` folder and allowed image formats, the browser sends the file to Cloudinary, and the API secret never leaves the server. Replaced images are deleted automatically.
+- Images: Cloudinary, with signed direct uploads. The backend signs each upload for the `products` folder and allowed image formats, the browser sends the file to Cloudinary, and the API secret never leaves the server. Removed, replaced and rejected images are queued and later deleted by the cleanup job, never during a request.
 - HTTPS only; separate env variables per environment.
 - Production uses its own database, database user and `JWT_SECRET`. Set them only on the hosting server, never in a local `.env` or a folder synced to OneDrive or similar.
-- Rate limits: 300 requests per minute per IP across the API (health check excluded), 20 login and register attempts per 15 minutes per IP, and 10 failed logins per 15 minutes per account. Next.js server rendering sends requests from one server IP, so watch the general limit after launch.
+- Rate limits: 300 requests per minute per IP across the API (health check excluded), 20 attempts per 15 minutes per IP shared by register, login, Google login, password reset and the five 2FA routes (one counter per IP, not one per route), and 10 failed logins per 15 minutes per account. Next.js server rendering sends requests from one server IP, so watch the general limit after launch.
 - Set `NODE_ENV=production`, `CLIENT_URL`, `COOKIE_DOMAIN` and `TRUST_PROXY_HOPS` on the backend host.
 - `TRUST_PROXY_HOPS` is the number of proxies in front of the API, and the server won't start in production without it. Check the chosen host's documentation: too high lets clients fake their IP and dodge rate limits, and too low puts all users under one limit.
 
 ### Production security checklist (added 2026-11-13)
-- Upload lifecycle: each signature covers one file at a server-chosen `public_id` and records an upload ticket. Saving a product removes the ticket. An hourly job in the API (with a MongoDB lease lock) deletes ticketed files left unattached for over 24 hours, and never an image a product uses. Orders, products and users never expire. See `backend/API.md` → Data lifecycle.
-- Product images: the backend checks each new image with Cloudinary before a product can use it: 5 MB at most (`UPLOAD_MAX_BYTES`), and a stored format of JPG, PNG or WebP. Rejected files are deleted. The upload signature also gives the browser the limit, so it can refuse a file before uploading.
+- Upload lifecycle: each signature covers one file at a server-chosen `public_id` and records an upload ticket. A product save only claims its images' tickets. An hourly job in the API (with a MongoDB lease lock) settles the tickets. It deletes files left unattached for over 24 hours, and images an edit removed or the size and format check rejected (after a 15-minute grace period). It never deletes an image a product uses. Orders, products and users never expire. See `backend/API.md` → Data lifecycle.
+- Product images: the backend checks each new image with Cloudinary before a product can use it: 5 MB at most (`UPLOAD_MAX_BYTES`), and a stored format of JPG, PNG or WebP. Rejected files are queued for the cleanup job. The upload signature also gives the browser the limit, so it can refuse a file before uploading.
 - Frontend: send a Content-Security-Policy and the other security headers (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`) from `next.config.ts`. Next.js needs inline scripts unless pages render per request with a nonce, so the policy allows `'unsafe-inline'` scripts but limits scripts, images, connections and framing to known origins. Check it in the browser before launch.
 - CI: `.github/workflows/ci.yml` runs the backend type check, both test suites, and the frontend lint and build on every PR and on every push to `main`. It needs no secrets.
 - MongoDB Atlas, set up by the developer in the Atlas console:
@@ -71,6 +71,16 @@ Define a `PaymentProvider` interface: `createPayment(order)`, `verifyPayment(pay
   - [ ] Backups: the free M0 tier has no automated backups. Use a paid tier with Cloud Backup, or a scheduled `mongodump` to separate storage. Test a restore before launch, and then every few months.
   - [ ] Connection string: a `mongodb+srv://` address with the database name, set only as an environment variable on the host. Rotate the password when anyone with access leaves, or if it may have leaked. The app already hides it in logs.
   - [ ] Monitoring: turn on Atlas alerts for connections and unusual activity, require 2FA for Atlas accounts, and keep the project member list short.
+
+### Production operations (planned, not started)
+Decide these with the hosting choice, and check each one off before launch.
+- [ ] Automatic restarts: the host restarts the API if it crashes or fails its health check (`/api/v1/health`, `/api/v1/health/ready`). On a fatal error the API exits instead of running half-broken.
+- [ ] Monitoring and alerts: uptime checks on the readiness probe, and log alerts. Which logs to alert on is listed in `SECURITY_IMPLEMENTATION_PLAN.md` P3.
+- [ ] Database backups with a tested restore (see Backups above).
+- [ ] Deployment rollback: know how to redeploy the previous version on the chosen host, and keep database changes backward compatible so a rollback is safe.
+- [ ] DNS recovery: who controls the domain and DNS records, where the records are written down, and the login and 2FA for the registrar.
+- [ ] Customer-facing outage handling: what customers see when the site or API is down (a maintenance page or message), and how pending orders are communicated.
+- [ ] Incident response: who is contacted, how secrets are rotated after a leak, and a short written runbook.
 
 ## 9. Backend File Structure
 See `backend-structure.md`.

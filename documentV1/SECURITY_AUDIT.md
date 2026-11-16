@@ -196,22 +196,22 @@ These don't give access to the backend: the API ignores the browser's role, pric
 | Area | Control | Evidence | Tests |
 |---|---|---|---|
 | Tokens | Tokens only in httpOnly cookies, never in JSON | `auth.controller.ts:32-44` (cookie settings); bodies return only `{user}` or `{requires2FA}` | `auth-tokens.test.ts` "login sets both cookies safely and never puts tokens in the body" |
-| Cookie flags | `Secure` in production; access `Lax`, refresh `Strict` limited to `/api/v1/auth`, 2FA cookie `Strict` limited to `/api/v1/auth/2fa` | `auth.controller.ts:32-44` | `jest/production-cookies.test.ts` (uncommitted) |
+| Cookie flags | `Secure` in production; access `Lax`, refresh `Strict` limited to `/api/v1/auth`, 2FA cookie `Strict` limited to `/api/v1/auth/2fa` | `auth.controller.ts:32-44` | `jest/production-cookies.test.ts` (committed in `34e2afb`) |
 | Logout | Ends all sessions on the server: `tokenVersion` bumped, refresh sessions deleted | `auth.service.ts:72-87`; `requireAuth` checks `tokenVersion` (`auth.middleware.ts:14-16`) | `sessions.test.ts` "logout cancels the token on every device" |
 | Refresh | Rotated each time; reusing an old one after 10 seconds ends all sessions; stored as a hash; TTL removes expired ones | `session.service.ts:9-14`; `refresh-session.model.ts:17` | `auth-tokens.test.ts` (5 tests) |
 | Password reset | Single use, 30 minutes, ends all sessions; same response for known and unknown emails | `password-reset.service.ts:11,19` | `password-reset.test.ts` (9) |
 | Roles | Read from the database on every request; changing the role applies to existing tokens | `auth.middleware.ts:15`, `role.middleware.ts:6-10` | `auth.test.ts` "requireRole blocks customers, and a role change applies to existing tokens" |
 | Admin routes | Every admin route requires `requireAuth` + `requireRole("admin")` | `product.routes.ts:23`, `category.routes.ts:15`, `order.admin.routes.ts:24`, `upload.routes.ts:10` | 401/403 tests in `orders`, `products`, `categories`, `uploads` |
 | Order ownership | A customer sees only their own orders (another customer's returns a 404) | `order.service.ts:175-179` filters by `user` from the session | `orders.test.ts` "customers only see their own orders…" |
-| Mass assignment | Strict Zod schemas; register ignores `role` | `order.schema.ts:15`, `product.schema.ts`, `category.schema.ts` | `jest/security.test.ts` (uncommitted), strict-schema tests |
+| Mass assignment | Strict Zod schemas; register ignores `role` | `order.schema.ts:15`, `product.schema.ts`, `category.schema.ts` | `jest/security.test.ts` (committed in `34e2afb`), strict-schema tests |
 | Checkout values | Prices, fees and totals rejected from the client; prices read from MongoDB inside the transaction | `order.schema.ts:14-15`; `order.service.ts` | `orders.test.ts` "the client can't send prices, a delivery fee or a total" |
 | Stock and duplicates | Conditional stock decrement in a transaction; `Idempotency-Key` with a unique index per user | `order.service.ts` | parallel oversell and parallel idempotency tests |
 | Status and payment | Strict status path; paid only once delivered, and only once | `order.status.ts`; `order.service.ts` | `orders.test.ts` |
 | Injection | `strictQuery`, strict query schemas, string types | `config/db.ts`, `utils/common.schema.ts` | `validate.test.ts`, `products.test.ts`, `jest/security.test.ts` |
-| Brute force | Per-IP and per-account login limits; 2FA lock after 5 wrong codes | `rate-limit.middleware.ts:13-68` | rate-limit tests in `auth`, `password-reset`, `two-factor` |
+| Brute force | Per-IP and per-account login limits; 2FA lock after 5 wrong codes. Updated by A-01 (2026-11-15, see §10): at most 5 guesses per account in a fixed 15-minute window, not reset by a new code | `rate-limit.middleware.ts:13-68`; 2FA: `two-factor.service.ts` | rate-limit tests in `auth`, `password-reset`, `two-factor` |
 | Errors | Generic 500, no stack trace; secrets hidden in logs | `error.middleware.ts`; `utils/logger.ts` | `auth.test.ts` |
 | Google sign-in | Audience and verified email checked; unsafe account linking handled | `google.service.ts:16-20` | `google.test.ts` (10) |
-| Uploads | Admin-only signing; one server-named file; size and format checked against Cloudinary's stored data; cleanup never deletes an image in use | `upload.service.ts`, `upload-cleanup.ts` (uncommitted) | `uploads.test.ts` (24), `upload-cleanup.test.ts` (8) |
+| Uploads | Admin-only signing; one server-named file; size and format checked against Cloudinary's stored data; cleanup never deletes an image in use | `upload.service.ts`, `upload-cleanup.ts` (committed in `34e2afb`) | `uploads.test.ts` (24), `upload-cleanup.test.ts` (8) |
 | Dependencies | `npm audit --omit=dev`: 0 advisories in backend and frontend (2026-11-13) | — | CI doesn't run `npm audit` yet (see P3) |
 
 ## 7. The five risk areas
@@ -338,22 +338,22 @@ These don't give access to the backend: the API ignores the browser's role, pric
 
 | ID | Severity | Status |
 |---|---|---|
-| S-01 | Medium | Fixed 2026-11-13: regression tests, verified locally and on the dev server; not committed |
+| S-01 | Medium | Fixed 2026-11-13: regression tests, verified locally and on the dev server; committed locally in `34e2afb` (not pushed or merged) |
 | S-02 | Medium | Open (needs approval for the link format change, plus frontend work) |
-| S-03 | Low | Fixed 2026-11-13: regression tests, verified locally and on the dev server; not committed (allowlist structure, not a `..` blacklist) |
-| S-04 | Low | Fixed 2026-11-13: regression tests, verified locally and on the dev server; not committed (policy: writes with a foreign or `null` Origin get 403; no Origin is allowed) |
-| S-05 | Low | Fixed 2026-11-13: regression tests, verified locally and on the dev server; not committed (request and error logs) |
+| S-03 | Low | Fixed 2026-11-13: regression tests, verified locally and on the dev server; committed locally in `34e2afb` (not pushed or merged) (allowlist structure, not a `..` blacklist) |
+| S-04 | Low | Fixed 2026-11-13: regression tests, verified locally and on the dev server; committed locally in `34e2afb` (not pushed or merged) (policy: writes with a foreign or `null` Origin get 403; no Origin is allowed) |
+| S-05 | Low | Fixed 2026-11-13: regression tests, verified locally and on the dev server; committed locally in `34e2afb` (not pushed or merged) (request and error logs) |
 | S-06 | Low | Open (decision needed) |
-| S-07 | Low | Fixed 2026-11-13: regression tests, verified locally and on the dev server; not committed (60 per 15 minutes per IP) |
+| S-07 | Low | Fixed 2026-11-13: regression tests, verified locally and on the dev server; committed locally in `34e2afb` (not pushed or merged) (60 per 15 minutes per IP) |
 | S-08 | Info | Open (decision needed) |
-| S-09 | Info | Fixed 2026-11-13: regression tests, verified locally and on the dev server; not committed |
+| S-09 | Info | Fixed 2026-11-13: regression tests, verified locally and on the dev server; committed locally in `34e2afb` (not pushed or merged) |
 | F-01 | High (frontend) | Open (needs frontend approval) |
 | F-02 | Medium (frontend) | Open (needs frontend approval) |
 | F-03 | Medium (frontend) | Open (needs frontend approval) |
 | N-01 | — | Not applicable |
-| R-11 | High-ish (data integrity, admin only) | Fixed 2026-11-14: regression tests, verified locally; not committed (see §9a) |
-| R-14 | Low likelihood, high impact (data integrity) | Fixed 2026-11-15: regression test, verified locally; not committed (see §9a) |
-| A-01 | Low–Medium (2FA guess limit bypassed by requesting a new code; needs the password) | Implemented and tested 2026-11-15, **not committed**: at most 5 guesses per account in a fixed 15-minute window (`twoFactorWindowStart`), not reset by a new code; no code is sent while the window's guesses are used up; the lock write is tied to the guessed code; 18 regression tests, verified locally. Its §11 review follow-ups were finished 2026-11-16, except item 5 (a separate test-harness task). Accepted edge behaviour is in `PROGRESS.md` Known Limits |
+| R-11 | High-ish (data integrity, admin only) | Fixed 2026-11-14: regression tests, verified locally; committed locally in `34e2afb` (not pushed or merged) (see §9a) |
+| R-14 | Low likelihood, high impact (data integrity) | Fixed 2026-11-15: regression test, verified locally; committed locally in `34e2afb` (not pushed or merged) (see §9a) |
+| A-01 | Low–Medium (2FA guess limit bypassed by requesting a new code; needs the password) | Implemented and tested 2026-11-15; committed locally in `e18e27a` (not pushed or merged): at most 5 guesses per account in a fixed 15-minute window (`twoFactorWindowStart`), not reset by a new code; no code is sent while the window's guesses are used up; the lock write is tied to the guessed code; 18 regression tests, verified locally. Its §11 review follow-ups were finished 2026-11-16, except item 5 (a separate test-harness task). Accepted edge behaviour is in `PROGRESS.md` Known Limits |
 
 ## 11. Production-readiness audit (2026-11-15)
 
@@ -361,7 +361,7 @@ A read-only audit of the whole backend at `34e2afb`, plus a `/code-review` of th
 
 | ID | Severity | Finding | Status |
 |---|---|---|---|
-| A-01 | Low–Medium | 2FA guess counter reset whenever a new code was sent | Implemented and tested, not committed (§10). Review items done 2026-11-16, except item 5 (separate task): see below |
+| A-01 | Low–Medium | 2FA guess counter reset whenever a new code was sent | Implemented, tested and committed locally in `e18e27a` (§10). Review items done 2026-11-16, except item 5 (separate task): see below |
 | A-02 | Low | Requests refused by the Origin check are never logged (`app.ts`: Origin check before the request logger) | Open |
 | A-03 | Low | A 500 error log can't be matched to its request (no request id) | Open |
 | A-04 | Low | Delivery-date and "mark paid" updates run outside a transaction: a concurrent cancel can leave a stale history entry, and a double click logs payment twice | Open; plan ready (transactions, as status changes already use) |
@@ -377,7 +377,7 @@ A read-only audit of the whole backend at `34e2afb`, plus a `/code-review` of th
 - **P-04:** stock held by unpaid orders. A limit of two active unpaid orders per customer is proposed and awaits the client.
 - **P-05:** backups and restore.
 - **P-06:** GDPR retention.
-- **P-07:** CI hasn't run on `34e2afb`.
+- **P-07:** CI hasn't run on `34e2afb` or `e18e27a` (both local only).
 
 **A-01 final review (2026-11-15): items.** None of these are application defects. Items 1, 3, 4, 6 and 8 were done on 2026-11-16. Each new check was shown to fail against a broken guard, then passed again once the source was restored. Details are in `PROGRESS.md`.
 1. The owner-race test should also check that the correct code cleared the count and the window. **Done.**

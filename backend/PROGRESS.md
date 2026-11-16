@@ -18,7 +18,11 @@ Real password reset and 2FA emails were tested on 2026-11-07 with a test account
 
 Phase 6 (admin dashboard) started on 2026-11-13. The backend part, `GET /admin/stats` (FR-18), is merged in [PR #10](https://github.com/biswash12-stac/malta-project/pull/10), with automated tests only. All 147 tests passed on 2026-11-13.
 
-A production-readiness audit on 2026-11-15 found no Critical or High backend issues; its findings and their status are in `documentV1/SECURITY_AUDIT.md` §11. A-01 (2FA guess limit) is implemented and tested in the working tree but **not committed**. Its final-review follow-ups were finished on 2026-11-16. Only the shared test-client timeout remains, as a separate task (see Still To Do → A-01 follow-up).
+PRs #11 (Jest and Supertest), #12 (checkout idempotency, readiness probe, API version header) and #13 (upload hardening and CI) are merged; the last merge is `76455f4`.
+
+The upload-ticket lifecycle, the development seed, the security fixes S-01, S-03, S-04, S-05, S-07 and S-09, and the code-review fixes R-1, R-2, R-3, R-4, R-5, R-6, R-9, R-10, R-11 and R-14 are committed **locally** on `feature/lifecycle-and-seed` as `34e2afb` (2026-11-15). That commit isn't pushed or merged, and CI hasn't run on it yet. S-02, S-06 and S-08 are still open. R-7 was fixed, then superseded by R-11. R-8, R-12 and R-13 were decisions with no code change (`documentV1/SECURITY_AUDIT.md` §9a).
+
+A production-readiness audit on 2026-11-15 found no Critical or High backend issues; its findings and their status are in `documentV1/SECURITY_AUDIT.md` §11. A-01 (2FA guess limit) is implemented, tested and committed **locally** as `e18e27a` (2026-11-16), on top of `34e2afb`. It isn't pushed or merged, and CI hasn't run on it yet. Its final-review follow-ups were finished on 2026-11-16. Only the shared test-client timeout remains, as a separate task (see Still To Do → A-01 follow-up).
 
 A whole-repo audit found 20 issues. Findings 2, 3, 4, 8 and 9 are done, and the other 15 are still open (see Still To Do).
 
@@ -46,7 +50,7 @@ The security audit's code fixes are done. Finding 9 (production secrets) is a la
 - Google login with `POST /auth/google`: creates a customer for a new email and links existing accounts safely
 - Nodemailer mailer: uses SMTP when set, and logs emails in development when it isn't
 - `requireAuth` and `requireRole("admin")` middleware
-- 20 register and login attempts per 15 minutes per IP address
+- 20 attempts per 15 minutes per IP address, shared by register, login, Google login, password reset and the five 2FA routes (one counter per IP, not one per route)
 - 10 failed logins per 15 minutes per account
 - 300 requests per minute per IP address across the API, with the health check excluded
 - Common passwords and single repeated characters are rejected at registration
@@ -71,8 +75,8 @@ The security audit's code fixes are done. Finding 9 (production secrets) is a la
 - Hiding a category hides its products from the public list, detail, search and filters
 - Offers store the lowest price of the previous 30 days as `priorLowestPrice`, and must be below it
 - Signed Cloudinary uploads: the backend signs, the browser uploads directly, and the API secret never leaves the server
-- Image size and format are enforced on product save: each image no product uses yet is looked up in Cloudinary (Admin API, Basic auth). It must be 5 MB or less (`UPLOAD_MAX_BYTES`) and stored as JPG, PNG or WebP. Otherwise the save returns a 400 with `details.images`, and the file is deleted. If Cloudinary can't be reached or sends a record without a numeric `bytes` and a text `format`, it returns a 503 `IMAGE_CHECK_UNAVAILABLE` and deletes nothing. Editing a product that doesn't exist returns 404 before any image is checked. The signature response also gives the browser `maxFileBytes` and `allowedMimeTypes`. 12 upload tests were added for this on 2026-11-13, so `uploads` went from 10 to 22, all passing locally
-- Upload tickets (2026-11-13): `POST /admin/uploads/signature` now signs one file at a server-chosen `public_id` (`products/<uuid>`) and records an `UploadTicket`. Saving a product with that image removes the ticket
+- Image size and format are enforced on product save: each image no product uses yet is looked up in Cloudinary (Admin API, Basic auth). It must be 5 MB or less (`UPLOAD_MAX_BYTES`) and stored as JPG, PNG or WebP. Otherwise the save returns a 400 with `details.images`. Since R-11 (2026-11-14), a rejected file isn't deleted during the request: it's queued for the cleanup job, which deletes it later under its claim and in-use rules. An image that isn't found is only reported. If Cloudinary can't be reached or sends a record without a numeric `bytes` and a text `format`, it returns a 503 `IMAGE_CHECK_UNAVAILABLE` and queues nothing. Editing a product that doesn't exist returns 404 before any image is checked. The signature response also gives the browser `maxFileBytes` and `allowedMimeTypes`. 12 upload tests were added for this on 2026-11-13, so `uploads` went from 10 to 22, all passing locally
+- Upload tickets (2026-11-13): `POST /admin/uploads/signature` now signs one file at a server-chosen `public_id` (`products/<uuid>`) and records an `UploadTicket`. Saving a product with that image removed the ticket until R-11 (2026-11-14); now a save only claims it, and the cleanup job settles it
 - Abandoned upload cleanup: runs in the API process a minute after start and then hourly, and `npm run cleanup:uploads` runs it once. It deletes only ticketed files left unattached for over 24 hours and never an image a product uses. A MongoDB lease lock prevents overlapping runs; a failed delete keeps its ticket and is retried
 - Development catalogue seed: `npm run seed:dev` inserts 14 categories and 100 placeholder products (prices in cents, no images, no ratings). Insert-only by slug, never updates or deletes, and refuses to run in production. Run on the development database on 2026-11-13: 14 categories and 100 products created; a second run skipped all of them
 - Product images must be in this store's Cloudinary account and `products` folder
@@ -219,7 +223,7 @@ Error: `{ success: false, error: { code, message, details } }`
 - Security: the seed accepted short admin passwords. It now requires 12 or more characters.
 - Security: only login and register were rate limited. The whole API now has a general limit.
 - Security: passwords could be guessed from many IP addresses. Each account now has its own limit on failed logins.
-- Security (A-01, 2026-11-15, production-readiness audit): logging in again a minute later sent a new 2FA code with its wrong-guess count reset, so someone with the password got about 4 guesses a minute instead of 5 per 15-minute lock. Guesses are now limited per account: at most 5 in a fixed 15-minute window (new `twoFactorWindowStart` field) that opens at the first counted guess. Each guess is counted in one atomic write; the lock after a 5th wrong guess and the reset after a correct one are separate writes. A new code doesn't touch the count or the window; only the window ending or a correct code starts it again. No code is sent while the window's 5 guesses are used up, so a lock that was never written (a crash between counting and locking) acts as a lock and ends with the window instead of sending codes that can't be used. The lock written by a fifth wrong guess now applies only while that guess's code is still stored, so it can't cancel a code sent after the window ended, or lock an owner whose correct guess logged in at the same moment. 18 regression tests: the lock and resend, the fixed window (moved on with a faked clock, only `Date`), its exact 15-minute boundary, a window ending before the lock, recovery after the window and after the lock, the reset after a correct code, the 2FA-on and 2FA-off flows, the stored count, an interrupted lock, an account from before the window field, guesses at an expired code, parallel wrong guesses either side of a new code, and four races between a guess and a login or another guess. Existing accounts need no migration: a missing window counts as ended. Verified on 2026-11-15 (235 node:test and 32 Jest tests, repeated 2FA runs, mutation checks; the final review found no application defect). Review follow-ups on 2026-11-16 made three tests stricter: the owner race checks the cleared count and window, the parallel bursts check the count, and the expired code checks the exact error. Each new check was shown to fail against a broken guard, and the source was then restored byte for byte. Re-verified on 2026-11-16: 235 node:test and 32 Jest tests, the 2FA file 3 times in a row, tsc, Prettier, build, and `npm audit --omit=dev` (0). Not committed yet
+- Security (A-01, 2026-11-15, production-readiness audit): logging in again a minute later sent a new 2FA code with its wrong-guess count reset, so someone with the password got about 4 guesses a minute instead of 5 per 15-minute lock. Guesses are now limited per account: at most 5 in a fixed 15-minute window (new `twoFactorWindowStart` field) that opens at the first counted guess. Each guess is counted in one atomic write; the lock after a 5th wrong guess and the reset after a correct one are separate writes. A new code doesn't touch the count or the window; only the window ending or a correct code starts it again. No code is sent while the window's 5 guesses are used up, so a lock that was never written (a crash between counting and locking) acts as a lock and ends with the window instead of sending codes that can't be used. The lock written by a fifth wrong guess now applies only while that guess's code is still stored, so it can't cancel a code sent after the window ended, or lock an owner whose correct guess logged in at the same moment. 18 regression tests: the lock and resend, the fixed window (moved on with a faked clock, only `Date`), its exact 15-minute boundary, a window ending before the lock, recovery after the window and after the lock, the reset after a correct code, the 2FA-on and 2FA-off flows, the stored count, an interrupted lock, an account from before the window field, guesses at an expired code, parallel wrong guesses either side of a new code, and four races between a guess and a login or another guess. Existing accounts need no migration: a missing window counts as ended. Verified on 2026-11-15 (235 node:test and 32 Jest tests, repeated 2FA runs, mutation checks; the final review found no application defect). Review follow-ups on 2026-11-16 made three tests stricter: the owner race checks the cleared count and window, the parallel bursts check the count, and the expired code checks the exact error. Each new check was shown to fail against a broken guard, and the source was then restored byte for byte. Re-verified on 2026-11-16: 235 node:test and 32 Jest tests, the 2FA file 3 times in a row, tsc, Prettier, build, and `npm audit --omit=dev` (0). Committed locally as `e18e27a` (not pushed or merged)
 - Security: `12345678` and `password` were accepted. Common passwords are now rejected.
 - Security: a server missing `NODE_ENV` ran with production protections off. It now refuses to start.
 - Security: the API read HTML form posts, which any site can send. It now reads JSON only.
@@ -291,8 +295,8 @@ Error: `{ success: false, error: { code, message, details } }`
 
 ## Still To Do
 
-### A-01 follow-up (final review, 2026-11-15; before committing A-01)
-None of these are application defects. The code changes need approval.
+### A-01 follow-up (final review, 2026-11-15)
+None of these are application defects. All are done and committed in `e18e27a`, except the separate test-harness task.
 - [x] The owner-race test now also checks that the correct code cleared the count and the window, and that the next login gets a working code: done 2026-11-16
 - [x] Known Limits overstated how the owner is alerted after a successful verification: corrected 2026-11-16
 - [x] The parallel-bursts test checks the count (4) after its first burst, so lost updates can't pass: done 2026-11-16
@@ -301,6 +305,20 @@ None of these are application defects. The code changes need approval.
 - [x] The owner-race abort listener uses `{ once: true }`, and its comment says node:test aborts the signal whenever a test ends (checked on Node 22.23.5): done 2026-11-16
 - [x] The over-width A-01 comments (test line 603, service line 20) were rewrapped to 100 characters: done 2026-11-16
 - [x] The Known Limits reference to R-13 didn't say where R-13 is defined: corrected 2026-11-16
+
+### Production-readiness audit follow-ups (2026-11-15)
+Findings, plans and status are in `documentV1/SECURITY_AUDIT.md` §11. Nothing below is started.
+- [ ] A-07: the development seed must confirm the target database (plan ready, needs approval)
+- [ ] A-04: delivery-date and payment updates in a transaction (plan ready, needs approval)
+- [ ] 2FA API feedback: `codeSent` and `retryAfterSeconds` on login, Google login and the 2FA on/off requests. The plan is ready, but the JSON needs agreeing with the frontend developer first
+- [ ] A-02, A-03, A-05, A-06, A-08: small logging, shutdown and configuration items
+
+### Decisions needed from the client
+- [ ] At most two active unpaid orders per customer? Today only checkout's 10 orders per 15 minutes per IP limits how much stock unpaid orders can hold. Not implemented
+- [ ] Newsletter: the frontend footer has a sign-up field, but the backend has no endpoint and stores no consent. Before collecting emails, decide whether to offer it and how consent is recorded (GDPR)
+- [ ] GDPR retention: orders keep names, phone numbers and addresses with no time limit, and there's no data export or deletion. A retention period and process are needed (see Legal checks below)
+- [ ] Google sign-in: ship it after a real test, or switch it off. `GOOGLE_CLIENT_ID` is required in production today even if it isn't used (A-08)
+- [ ] Bulk catalogue import: on 2026-11-15 the client asked to load about 1,000 products. A spreadsheet (Excel or CSV) was recommended over PDF. This is a future requirement and nothing is designed or built yet. The development seed (`npm run seed:dev`) is for placeholder data only, not client imports
 
 ### Auth upgrade
 - [ ] Create a free Google OAuth client ID and set `GOOGLE_CLIENT_ID` in `.env`
@@ -347,6 +365,7 @@ None of these are application defects. The code changes need approval.
 - [ ] Set `NODE_ENV=production`, `MONGODB_URI`, a new `JWT_SECRET`, a new `TWO_FACTOR_SECRET`, `CLIENT_URL`, `COOKIE_DOMAIN`, `TRUST_PROXY_HOPS`, `GOOGLE_CLIENT_ID`, `SMTP_*`, `MAIL_FROM` and `CLOUDINARY_*` on the server
 - [ ] Add the live site's address to the Google OAuth client's allowed origins
 - [ ] Allow the server's IP address in Atlas Network Access
+- [ ] Production operations (planned, not started): automatic restarts, monitoring and alerts, database backups with a tested restore, deployment rollback, DNS recovery, customer-facing outage handling and incident response. The checklist is in `documentV1/architecture.md` §8 → Production operations
 
 ## Known Limits
 

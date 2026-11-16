@@ -61,7 +61,7 @@ Validation errors put field messages in `details`. Errors about the input as a w
 | Limit | Window | Applies to |
 |---|---|---|
 | 300 requests per IP | 1 minute | the whole API, except `/health` and `/health/ready` |
-| 20 attempts per IP | 15 minutes | register, login, Google login, 2FA routes |
+| 20 attempts per IP | 15 minutes | register, login, Google login, password reset (`POST /auth/reset-password`) and the five 2FA routes (`/2fa/enable`, `/2fa/verify`, `/2fa/disable/request`, `/2fa/disable`, `/2fa/validate`). They share one counter per IP, not one per route |
 | 10 failed logins per account | 15 minutes | login |
 | 60 per IP | 15 minutes | `POST /auth/refresh` |
 | 5 per IP, and 5 per email | 1 hour | `POST /auth/forgot-password` |
@@ -146,7 +146,7 @@ Validation errors put field messages in `details`. Errors about the input as a w
 
 **Notes:**
 - **One signature covers exactly one file,** at the server-chosen `publicId`, and Cloudinary rejects it after about an hour.
-- **Tickets:** each signature records an upload ticket. Saving a product with that image removes the ticket.
+- **Tickets:** each signature records an upload ticket. Saving a product with that image only claims the ticket, and the cleanup job settles it later (see Data lifecycle).
 - **Cleanup:** a file left unattached for over 24 hours is deleted by the cleanup job (see Data lifecycle).
 - **Changed on 2026-11-13:** the response used to return `folder` and signed `folder`. It now returns `publicId` and signs `public_id`.
 
