@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useMemo, useState, useSyncExternalStore, useRef } from "react";
 import Link from "next/link";
 import {
   Search,
@@ -15,6 +15,8 @@ import {
   PackageSearch,
   ShoppingBag,
 } from "lucide-react";
+import { gsap } from "gsap";
+import { useGSAP } from "@gsap/react";
 
 import {
   type CartItem,
@@ -42,32 +44,34 @@ type SortOption =
   | "name";
 
 export default function ProductsPage() {
-  
+  const pageRef = useRef<HTMLElement>(null);
+
   const products = useProducts();
 
-  
+
   const visibleProducts = useMemo(
     () => products.filter((product) => product.isVisible !== false),
     [products]
   );
 
-  
+
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [sortBy, setSortBy] = useState<SortOption>("popular");
   const [maxPrice, setMaxPrice] = useState(DEFAULT_MAX_PRICE);
 
-  
+
   const [currentPage, setCurrentPage] = useState(1);
   const [showFilters, setShowFilters] = useState(false);
   const [message, setMessage] = useState("");
 
-  
+
   const wishlist = useSyncExternalStore(
     subscribeToShopStorage,
     getWishlistSnapshot,
     getEmptyWishlistSnapshot
   );
+
 
   const cartCount = useSyncExternalStore(
     subscribeToShopStorage,
@@ -75,7 +79,7 @@ export default function ProductsPage() {
     () => 0
   );
 
-  
+
   const showMessage = (text: string) => {
     setMessage(text);
 
@@ -84,7 +88,7 @@ export default function ProductsPage() {
     }, 2500);
   };
 
-  
+
   const filteredProducts = useMemo(() => {
     let result = [...visibleProducts];
 
@@ -107,9 +111,7 @@ export default function ProductsPage() {
       );
     }
 
-    result = result.filter(
-      (product) => product.price <= maxPrice
-    );
+    result = result.filter((product) => product.price <= maxPrice);
 
     switch (sortBy) {
       case "price-low":
@@ -125,9 +127,7 @@ export default function ProductsPage() {
         break;
 
       case "name":
-        result.sort((a, b) =>
-          a.name.localeCompare(b.name)
-        );
+        result.sort((a, b) => a.name.localeCompare(b.name));
         break;
 
       default:
@@ -144,17 +144,206 @@ export default function ProductsPage() {
     sortBy,
   ]);
 
-  
   const totalPages = Math.ceil(
     filteredProducts.length / ITEMS_PER_PAGE
   );
 
-  const visiblePageProducts = filteredProducts.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
+  const safeCurrentPage = Math.min(
+    currentPage,
+    Math.max(totalPages, 1)
   );
 
-  
+  const pageProducts = filteredProducts.slice(
+    (safeCurrentPage - 1) * ITEMS_PER_PAGE,
+    safeCurrentPage * ITEMS_PER_PAGE
+  );
+
+
+  const pageProductKey = pageProducts
+    .map((product) => product.id)
+    .join("-");
+
+
+  useGSAP(
+    () => {
+      const page = pageRef.current;
+
+      if (!page) return;
+
+      const reduceMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)"
+      ).matches;
+
+      if (reduceMotion) return;
+
+      const tl = gsap.timeline({
+        defaults: {
+          ease: "power3.out",
+        },
+      });
+
+      tl.fromTo(
+        ".products-hero-label",
+        {
+          y: 20,
+          opacity: 0,
+        },
+        {
+          y: 0,
+          opacity: 1,
+          duration: 0.6,
+        }
+      )
+        .fromTo(
+          ".products-hero-title",
+          {
+            y: 45,
+            opacity: 0,
+            filter: "blur(10px)",
+          },
+          {
+            y: 0,
+            opacity: 1,
+            filter: "blur(0px)",
+            duration: 0.9,
+          },
+          "-=0.3"
+        )
+        .fromTo(
+          ".products-hero-description",
+          {
+            y: 25,
+            opacity: 0,
+          },
+          {
+            y: 0,
+            opacity: 1,
+            duration: 0.65,
+          },
+          "-=0.5"
+        )
+        .fromTo(
+          ".products-count",
+          {
+            x: 30,
+            opacity: 0,
+          },
+          {
+            x: 0,
+            opacity: 1,
+            duration: 0.65,
+          },
+          "-=0.4"
+        )
+        .fromTo(
+          ".products-search",
+          {
+            y: 30,
+            opacity: 0,
+            scale: 0.97,
+          },
+          {
+            y: 0,
+            opacity: 1,
+            scale: 1,
+            duration: 0.7,
+          },
+          "-=0.35"
+        )
+        .fromTo(
+          ".products-toolbar",
+          {
+            y: 25,
+            opacity: 0,
+          },
+          {
+            y: 0,
+            opacity: 1,
+            duration: 0.6,
+          },
+          "-=0.2"
+        )
+        .fromTo(
+          ".products-filter-panel",
+          {
+            x: -25,
+            opacity: 0,
+          },
+          {
+            x: 0,
+            opacity: 1,
+            duration: 0.65,
+          },
+          "-=0.35"
+        )
+        .fromTo(
+          ".products-category-chips",
+          {
+            y: 20,
+            opacity: 0,
+          },
+          {
+            y: 0,
+            opacity: 1,
+            duration: 0.55,
+          },
+          "-=0.4"
+        );
+
+    },
+    {
+      scope: pageRef,
+    }
+  );
+
+
+
+  useGSAP(
+    () => {
+      const page = pageRef.current;
+
+      if (!page) return;
+
+      const cards = gsap.utils.toArray<HTMLElement>(
+        ".product-card",
+        page
+      );
+
+      if (!cards.length) return;
+
+      const reduceMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)"
+      ).matches;
+
+      if (reduceMotion) return;
+
+      gsap.fromTo(
+        cards,
+        {
+          y: 35,
+          opacity: 0,
+          scale: 0.96,
+        },
+        {
+          y: 0,
+          opacity: 1,
+          scale: 1,
+          duration: 0.65,
+          stagger: 0.075,
+          ease: "power3.out",
+          clearProps: "transform,opacity",
+        }
+      );
+    },
+    {
+      dependencies: [pageProductKey],
+      scope: pageRef,
+      revertOnUpdate: true,
+    }
+  );
+
+
+
   const toggleWishlist = (productId: number) => {
     const currentWishlist = getWishlist();
 
@@ -175,7 +364,8 @@ export default function ProductsPage() {
     }
   };
 
-  
+ 
+
   const addToCart = (product: (typeof visibleProducts)[number]) => {
     const currentCart = getCart();
 
@@ -189,9 +379,9 @@ export default function ProductsPage() {
       updatedCart = currentCart.map((item) =>
         item.id === product.id
           ? {
-            ...item,
-            quantity: item.quantity + 1,
-          }
+              ...item,
+              quantity: item.quantity + 1,
+            }
           : item
       );
     } else {
@@ -217,7 +407,7 @@ export default function ProductsPage() {
     showMessage(`${product.name} added to cart!`);
   };
 
- 
+
   const clearFilters = () => {
     setSearch("");
     setSelectedCategory("All");
@@ -226,7 +416,6 @@ export default function ProductsPage() {
     setCurrentPage(1);
   };
 
-  
   const handleSearch = (value: string) => {
     setSearch(value);
     setCurrentPage(1);
@@ -247,84 +436,131 @@ export default function ProductsPage() {
     setCurrentPage(1);
   };
 
- 
-  const safeCurrentPage = Math.min(
-    currentPage,
-    Math.max(totalPages, 1)
-  );
-
-  const pageProducts = filteredProducts.slice(
-    (safeCurrentPage - 1) * ITEMS_PER_PAGE,
-    safeCurrentPage * ITEMS_PER_PAGE
-  );
-
   return (
-    <main className="min-h-screen bg-[#fafafa] text-[#171717]">
-      
-      <section className="bg-[#101A17] px-5 py-14 text-white sm:px-8 sm:py-20">
-        <div className="mx-auto max-w-7xl">
-          <p className="mb-4 text-xs font-semibold uppercase tracking-[0.3em] text-[#35C477]">
-            Discover something fresh
-          </p>
+    <main
+      ref={pageRef}
+      className="min-h-screen bg-[#fafafa] text-[#171717]"
+    >
+     
 
-          <div className="flex flex-col justify-between gap-8 md:flex-row md:items-end">
-            <div>
-              <h1 className="text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
-                Shop Everything
-                <span className="text-[#35C477]">.</span>
-              </h1>
+     
+<section className="relative isolate overflow-hidden bg-[#F3F7F1] px-5 py-16 sm:px-8 sm:py-20 lg:py-24">
+  {/* Decorative background */}
+  <div
+    aria-hidden="true"
+    className="pointer-events-none absolute -right-28 -top-32 h-[420px] w-[420px] rounded-full border border-[#35C477]/15 sm:h-[550px] sm:w-[550px]"
+  />
+  <div
+    aria-hidden="true"
+    className="pointer-events-none absolute -right-12 -top-16 h-[300px] w-[300px] rounded-full border border-[#35C477]/20 sm:h-[420px] sm:w-[420px]"
+  />
 
-              <p className="mt-5 max-w-xl text-sm leading-7 text-gray-400 sm:text-base">
-                Explore quality groceries, fresh products,
-                and everyday essentials — all in one place.
-              </p>
-            </div>
+  <div className="relative mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-[1.15fr_0.85fr]">
 
-            <div className="flex items-center gap-3 text-sm text-gray-300">
-              <ShoppingBag
-                size={20}
-                className="text-[#35C477]"
-              />
-              <span>
-                {visibleProducts.length} products available
-              </span>
-            </div>
-          </div>
+    {/* Left content */}
+    <div className="relative z-10">
+      <p className="products-hero-label mb-6 inline-flex items-center gap-2 rounded-full border border-[#35C477]/30 bg-white px-4 py-2 text-[10px] font-bold uppercase tracking-[0.22em] text-[#249B5A] shadow-sm">
+        <span className="h-2 w-2 rounded-full bg-[#35C477]" />
+        Your everyday marketplace
+      </p>
 
-          
-          <div className="relative mt-10 max-w-2xl">
-            <Search
-              size={20}
-              className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400"
-            />
+      <h1 className="products-hero-title max-w-3xl text-5xl font-black leading-[1.05] tracking-[-0.055em] text-[#14251B] sm:text-6xl lg:text-7xl">
+        Good things.
+        <br />
+        Better <span className="text-[#35C477]">living.</span>
+      </h1>
 
-            <input
-              type="search"
-              value={search}
-              onChange={(e) => handleSearch(e.target.value)}
-              placeholder="Search products, categories..."
-              aria-label="Search products"
-              className="w-full rounded-2xl border border-white/10 bg-white px-5 py-4 pl-14 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-4 focus:ring-[#35C477]/20"
-            />
+      <p className="products-hero-description mt-7 max-w-lg text-sm leading-7 text-[#68766B] sm:text-base">
+        From fresh groceries to everyday essentials, discover
+        quality products and little things that make life better.
+      </p>
 
-            {search && (
-              <button
-                type="button"
-                onClick={() => handleSearch("")}
-                aria-label="Clear search"
-                className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 transition hover:text-gray-900"
-              >
-                <X size={18} />
-              </button>
-            )}
-          </div>
+      {/* Search */}
+      <div className="products-search mt-9 flex max-w-xl items-center rounded-2xl border border-[#E3EAE1] bg-white p-2 shadow-[0_12px_40px_rgba(24,60,35,0.06)] transition focus-within:border-[#35C477] focus-within:shadow-[0_12px_40px_rgba(53,196,119,0.12)]">
+        <Search
+          size={20}
+          className="ml-3 shrink-0 text-[#35C477]"
+        />
+
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => handleSearch(e.target.value)}
+          placeholder="What are you looking for?"
+          aria-label="Search products"
+          className="min-w-0 flex-1 bg-transparent px-4 py-3 text-sm text-[#14251B] outline-none placeholder:text-gray-400"
+        />
+
+        {search && (
+          <button
+            type="button"
+            onClick={() => handleSearch("")}
+            aria-label="Clear search"
+            className="mr-2 rounded-full p-2 text-gray-400 transition hover:bg-gray-100 hover:text-black"
+          >
+            <X size={17} />
+          </button>
+        )}
+      </div>
+
+      {/* Product count */}
+      <div className="products-count mt-7 flex items-center gap-3 text-sm text-[#68766B]">
+        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#DDF5E4] text-[#249B5A]">
+          <ShoppingBag size={17} />
         </div>
-      </section>
 
-      
+        <span>
+          Explore <strong className="text-[#14251B]">{visibleProducts.length}+</strong> products for your everyday needs
+        </span>
+      </div>
+    </div>
+
+    {/* Right visual */}
+    <div className="relative mx-auto flex min-h-[300px] w-full max-w-[460px] items-center justify-center sm:min-h-[390px]">
+
+      {/* Main green circle */}
+      <div className="absolute h-[260px] w-[260px] rounded-full bg-[#D9F1DC] sm:h-[340px] sm:w-[340px]" />
+
+      {/* Inner decorative circle */}
+      <div className="absolute h-[210px] w-[210px] rounded-full border border-[#35C477]/30 sm:h-[280px] sm:w-[280px]" />
+
+      {/* Center shopping visual */}
+      <div className="relative z-10 flex h-44 w-44 rotate-[-7deg] items-center justify-center rounded-[2.5rem] bg-[#35C477] shadow-[0_25px_60px_rgba(53,196,119,0.25)] sm:h-56 sm:w-56">
+        <ShoppingBag
+          size={105}
+          strokeWidth={1.1}
+          className="text-white sm:h-32 sm:w-32"
+        />
+
+        <span className="absolute -right-5 -top-5 flex h-16 w-16 items-center justify-center rounded-full border-4 border-[#F3F7F1] bg-white text-[#249B5A] shadow-lg">
+          <span className="text-xl font-black">B.</span>
+        </span>
+      </div>
+
+      {/* Floating product count card */}
+      <div className="absolute bottom-5 left-0 z-20 rounded-2xl border border-white bg-white/95 p-4 shadow-xl sm:bottom-8 sm:left-2">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+          Made for everyday
+        </p>
+        <p className="mt-1 text-lg font-black text-[#14251B]">
+          Shop smarter<span className="text-[#35C477]">.</span>
+        </p>
+      </div>
+
+      {/* Floating freshness card */}
+      <div className="absolute right-0 top-5 z-20 rounded-2xl border border-white bg-white/95 px-4 py-3 shadow-xl sm:right-2 sm:top-10">
+        <div className="flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-[#35C477]" />
+          <span className="text-xs font-bold text-[#14251B]">
+            Fresh finds daily
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
       <section className="mx-auto max-w-7xl px-5 py-10 sm:px-8 lg:py-14">
-      
-        <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+        <div className="products-toolbar mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h2 className="text-2xl font-bold tracking-tight">
               All Products
@@ -336,7 +572,6 @@ export default function ProductsPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            
             <button
               type="button"
               onClick={() => setShowFilters(!showFilters)}
@@ -352,7 +587,7 @@ export default function ProductsPage() {
               Filters
             </button>
 
-           
+      
             <div className="relative">
               <ArrowUpDown
                 size={16}
@@ -386,10 +621,13 @@ export default function ProductsPage() {
           </div>
         </div>
 
+   
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-[230px_1fr]">
+
        
           <aside
             className={`
+              products-filter-panel
               ${showFilters ? "block" : "hidden"}
               h-fit rounded-2xl border border-gray-100 bg-white p-6
               lg:sticky lg:top-28 lg:block
@@ -407,7 +645,7 @@ export default function ProductsPage() {
               </button>
             </div>
 
-           
+    
             <div className="border-b border-gray-100 pb-7">
               <h4 className="mb-4 text-sm font-semibold">
                 Categories
@@ -424,9 +662,10 @@ export default function ProductsPage() {
                     }}
                     className={`
                       flex w-full items-center justify-between text-left text-sm transition
-                      ${selectedCategory === category
-                        ? "font-semibold text-[#279d5e]"
-                        : "text-gray-500 hover:text-gray-900"
+                      ${
+                        selectedCategory === category
+                          ? "font-semibold text-[#279d5e]"
+                          : "text-gray-500 hover:text-gray-900"
                       }
                     `}
                   >
@@ -440,7 +679,7 @@ export default function ProductsPage() {
               </div>
             </div>
 
-            
+         
             <div className="pt-7">
               <div className="mb-4 flex items-center justify-between">
                 <h4 className="text-sm font-semibold">
@@ -472,10 +711,9 @@ export default function ProductsPage() {
             </div>
           </aside>
 
-          
           <div>
-            
-            <div className="mb-7 flex gap-2 overflow-x-auto pb-2">
+
+            <div className="products-category-chips mb-7 flex gap-2 overflow-x-auto pb-2">
               {categories.map((category) => (
                 <button
                   type="button"
@@ -483,9 +721,10 @@ export default function ProductsPage() {
                   onClick={() => handleCategory(category)}
                   className={`
                     shrink-0 rounded-full px-5 py-2.5 text-xs font-semibold transition
-                    ${selectedCategory === category
-                      ? "bg-[#35C477] text-white"
-                      : "border border-gray-200 bg-white text-gray-600 hover:border-[#35C477] hover:text-[#279d5e]"
+                    ${
+                      selectedCategory === category
+                        ? "bg-[#35C477] text-white"
+                        : "border border-gray-200 bg-white text-gray-600 hover:border-[#35C477] hover:text-[#279d5e]"
                     }
                   `}
                 >
@@ -494,7 +733,6 @@ export default function ProductsPage() {
               ))}
             </div>
 
-           
             {pageProducts.length > 0 ? (
               <div className="grid grid-cols-2 gap-4 sm:gap-6 xl:grid-cols-4">
                 {pageProducts.map((product) => {
@@ -503,9 +741,8 @@ export default function ProductsPage() {
                   return (
                     <article
                       key={product.id}
-                      className="group overflow-hidden rounded-2xl border border-gray-100 bg-white transition duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/5"
+                      className="product-card group overflow-hidden rounded-2xl border border-gray-100 bg-white transition duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/5"
                     >
-                     
                       <div className="relative aspect-square overflow-hidden bg-gray-50">
                         <Link
                           href={`/products/${product.id}`}
@@ -521,20 +758,23 @@ export default function ProductsPage() {
                             />
                           ) : (
                             <div className="flex h-full w-full items-center justify-center bg-gray-100">
-                              <PackageSearch size={40} className="text-gray-400" />
-                              <span className="sr-only">No product image available</span>
+                              <PackageSearch
+                                size={40}
+                                className="text-gray-400"
+                              />
+
+                              <span className="sr-only">
+                                No product image available
+                              </span>
                             </div>
                           )}
                         </Link>
-
-                        
                         {product.badge && (
                           <span className="absolute left-3 top-3 rounded-full bg-[#35C477] px-3 py-1.5 text-[10px] font-bold text-white">
                             {product.badge}
                           </span>
                         )}
 
-                       
                         <button
                           type="button"
                           onClick={() => toggleWishlist(product.id)}
@@ -546,9 +786,10 @@ export default function ProductsPage() {
                           aria-pressed={isWishlisted}
                           className={`
                             absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-sm transition
-                            ${isWishlisted
-                              ? "text-red-500"
-                              : "text-gray-500 hover:text-red-500"
+                            ${
+                              isWishlisted
+                                ? "text-red-500"
+                                : "text-gray-500 hover:text-red-500"
                             }
                           `}
                         >
@@ -561,7 +802,6 @@ export default function ProductsPage() {
                         </button>
                       </div>
 
-                      
                       <div className="p-3 sm:p-4">
                         <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[#279d5e]">
                           {product.category}
@@ -577,12 +817,8 @@ export default function ProductsPage() {
                           </p>
                         </Link>
 
-                       
                         <div className="mt-2 flex items-center gap-1 text-xs text-amber-500">
-                          <Star
-                            size={13}
-                            fill="currentColor"
-                          />
+                          <Star size={13} fill="currentColor" />
 
                           <span className="font-semibold text-gray-700">
                             {product.rating}
@@ -593,7 +829,6 @@ export default function ProductsPage() {
                           </span>
                         </div>
 
-                       
                         <div className="mt-4 flex flex-wrap items-center gap-2">
                           <span className="text-sm font-bold sm:text-base">
                             Rs. {product.price}
@@ -606,7 +841,6 @@ export default function ProductsPage() {
                           )}
                         </div>
 
-                      
                         <button
                           type="button"
                           onClick={() => addToCart(product)}
@@ -621,7 +855,7 @@ export default function ProductsPage() {
                 })}
               </div>
             ) : (
-              
+   
               <div className="flex min-h-[350px] flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white px-5 text-center">
                 <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-gray-50 text-gray-400">
                   <PackageSearch size={30} />
@@ -646,7 +880,6 @@ export default function ProductsPage() {
               </div>
             )}
 
-            
             {totalPages > 1 && (
               <div className="mt-12 flex flex-wrap items-center justify-center gap-2">
                 <button
@@ -673,9 +906,10 @@ export default function ProductsPage() {
                     }
                     className={`
                       h-10 w-10 rounded-lg text-sm font-semibold transition
-                      ${safeCurrentPage === page
-                        ? "bg-[#35C477] text-white"
-                        : "border border-gray-200 bg-white hover:border-[#35C477]"
+                      ${
+                        safeCurrentPage === page
+                          ? "bg-[#35C477] text-white"
+                          : "border border-gray-200 bg-white hover:border-[#35C477]"
                       }
                     `}
                   >
@@ -701,7 +935,6 @@ export default function ProductsPage() {
         </div>
       </section>
 
-   
       {message && (
         <div
           role="status"
@@ -712,11 +945,12 @@ export default function ProductsPage() {
             size={18}
             className="shrink-0 text-[#35C477]"
           />
+
           {message}
         </div>
       )}
 
-      
+
       <Link
         href="/cart"
         aria-label={`Open cart, ${cartCount} items`}
