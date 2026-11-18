@@ -15,6 +15,7 @@ export type User = {
   role: "user" | "admin";
   phone?: string;
   address?: string;
+  time?: string;
 };
 
 type Account = User & {
@@ -25,7 +26,9 @@ type ProfileUpdate = {
   name: string;
   phone: string;
   address: string;
+  time?: string;
 };
+
 
 type AuthContextType = {
   user: User | null;

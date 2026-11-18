@@ -55,6 +55,7 @@ export default function CheckoutPage() {
   const [address, setAddress] = useState<string | undefined>();
   const [city, setCity] = useState("");
   const [instructions, setInstructions] = useState("");
+  const [time, setTime] = useState<string | undefined>();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -64,6 +65,7 @@ export default function CheckoutPage() {
   const emailValue = email ?? user?.email ?? "";
   const phoneValue = phone ?? user?.phone ?? "";
   const addressValue = address ?? user?.address ?? "";
+  const timeValue = time ?? user?.time ?? "";
 
   const subtotal = cart.reduce(
     (total, item) => total + item.price * item.quantity,
@@ -319,6 +321,21 @@ export default function CheckoutPage() {
                         }
                         placeholder="House number, street, area, ward..."
                         rows={3}
+                        autoComplete="street-address"
+                        required
+                        className="checkout-input resize-none"
+                      />
+                    </FormField>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <FormField label="Preferable Time" required>
+                      <textarea
+                        value={timeValue}
+                        onChange={(event) =>
+                          setTime(event.target.value)
+                        }
+                        placeholder="Preferable time for delivery..."
+                        rows={2}
                         autoComplete="street-address"
                         required
                         className="checkout-input resize-none"
