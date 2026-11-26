@@ -23,6 +23,7 @@ import {
   subscribeToOrders,
   type AdminOrder,
 } from "@/lib/order-storage";
+import Image from "next/image";
 
 const formatPrice = (price: number) =>
   `Rs. ${price.toLocaleString("en-NP")}`;
@@ -37,11 +38,11 @@ function OrderConfirmationContent() {
     getServerOrdersSnapshot
   );
 
- const order: AdminOrder | null = orderId
-  ? orders.find((item) => item.id === orderId) ??
+  const order: AdminOrder | null = orderId
+    ? orders.find((item) => item.id === orderId) ??
     getOrderById(orderId) ??
     null
-  : null;
+    : null;
 
   return (
     <main className="min-h-screen bg-[#fafafa] px-5 py-12 sm:px-8 sm:py-16">
@@ -57,7 +58,7 @@ function OrderConfirmationContent() {
             </h1>
 
             <p className="mt-3 max-w-md text-sm leading-6 text-gray-500">
-             {` We couldn't find this order. Please check your order link
+              {` We couldn't find this order. Please check your order link
               or return to the shop.`}
             </p>
 
@@ -151,7 +152,7 @@ function OrderConfirmationContent() {
               </div>
             </section>
 
-            
+
             <section className="mt-6 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
               <h2 className="text-lg font-bold text-[#101A17]">
                 Order Summary
@@ -164,7 +165,9 @@ function OrderConfirmationContent() {
                     className="flex items-center gap-4"
                   >
                     <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-gray-50">
-                      <img
+                      <Image
+                        fill
+                        sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                         src={item.image}
                         alt={item.name}
                         className="h-full w-full object-cover"
@@ -221,7 +224,7 @@ function OrderConfirmationContent() {
               </div>
             </section>
 
-           
+
             <section className="mt-6 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
               <h2 className="text-lg font-bold text-[#101A17]">
                 Delivery Details
@@ -277,7 +280,7 @@ function OrderConfirmationContent() {
               </div>
             </section>
 
-           
+
             <section className="mt-6 rounded-2xl border border-[#35C477]/20 bg-[#35C477]/5 p-5 sm:p-6">
               <div className="flex items-start gap-3">
                 <CheckCircle2
@@ -298,7 +301,7 @@ function OrderConfirmationContent() {
               </div>
             </section>
 
-           
+
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link
                 href="/products"

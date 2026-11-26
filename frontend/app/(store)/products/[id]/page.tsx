@@ -20,6 +20,9 @@ import {
 import { products } from "@/data/products";
 import type { Product } from "@/data/products";
 
+import { useProducts } from "@/hooks/useProducts";
+import type { AdminProduct } from "@/lib/product-storage";
+
 import {
   type CartItem,
   getCart,
@@ -30,15 +33,24 @@ import {
   saveWishlist,
   subscribeToShopStorage,
 } from "@/lib/shop-storage";
+import Image from "next/image";
 
 export default function ProductDetailsPage() {
   const params = useParams<{ id: string }>();
 
-  const productId = Number(params.id);
+  // const productId = Number(params.id);
 
+  // const product = products.find(
+  //   (item) => item.id === productId
+  // );
+
+  const products = useProducts();
+  const productId = params.id;
   const product = products.find(
-    (item) => item.id === productId
-  );
+    (items) =>
+      String(items.id) === String(productId) && items.isVisible !== false
+  )
+
 
   const [quantity, setQuantity] = useState(1);
   const [message, setMessage] = useState("");
@@ -53,7 +65,7 @@ export default function ProductDetailsPage() {
     ? wishlist.includes(product.id)
     : false;
 
-  
+
   useEffect(() => {
     if (!message) return;
 
@@ -75,8 +87,8 @@ export default function ProductDetailsPage() {
     );
   };
 
- 
-  const addToCart = (item: Product) => {
+
+  const addToCart = (item: AdminProduct) => {
     const currentCart = getCart();
 
     const existingItem = currentCart.find(
@@ -117,7 +129,7 @@ export default function ProductDetailsPage() {
     setMessage(`${item.name} added to cart!`);
   };
 
-  
+
   const toggleWishlist = (productId: number) => {
     const currentWishlist = getWishlist();
 
@@ -141,7 +153,7 @@ export default function ProductDetailsPage() {
     );
   };
 
-  
+
   if (!product) {
     return (
       <main className="flex min-h-[70vh] items-center justify-center bg-[#fafafa] px-5">
@@ -171,12 +183,13 @@ export default function ProductDetailsPage() {
     );
   }
 
- 
+
   const relatedProducts = products
     .filter(
       (item) =>
         item.category === product.category &&
-        item.id !== product.id
+        String(item.id) !== String(product.id) &&
+        item.isVisible !== false
     )
     .slice(0, 4);
 
@@ -190,7 +203,7 @@ export default function ProductDetailsPage() {
 
   return (
     <main className="min-h-screen bg-[#fafafa] text-[#171717]">
-      
+
       <section className="border-b border-gray-100 bg-white">
         <div className="mx-auto max-w-7xl px-5 py-5 sm:px-8">
           <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400 sm:text-sm">
@@ -225,9 +238,9 @@ export default function ProductDetailsPage() {
         </div>
       </section>
 
-     
+
       <section className="mx-auto max-w-7xl px-5 py-10 sm:px-8 sm:py-14">
-        
+
         <Link
           href="/products"
           className="mb-8 inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-[#279d5e]"
@@ -237,7 +250,7 @@ export default function ProductDetailsPage() {
         </Link>
 
         <div className="grid grid-cols-1 gap-10 lg:grid-cols-2 lg:gap-16">
-          
+
           <div>
             <div className="relative overflow-hidden rounded-3xl border border-gray-100 bg-white p-4 sm:p-8">
               {product.badge && (
@@ -252,12 +265,20 @@ export default function ProductDetailsPage() {
                 </span>
               )}
 
-              <div className="flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-gray-50">
-                <img
-                  src={product.image}
-                  alt={product.name}
-                  className="h-full w-full object-cover transition duration-500 hover:scale-105"
-                />
+              <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-gray-50">
+                {typeof product.image === "string" && product.image.trim() !== "" ? (
+                  <Image
+                    src={product.image}
+                    alt={product.name}
+                    fill
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 50vw"
+                    className="object-contain"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-gray-400">
+                    Product image unavailable
+                  </div>
+                )}
               </div>
             </div>
 
@@ -266,7 +287,7 @@ export default function ProductDetailsPage() {
             </p>
           </div>
 
-          
+
           <div className="flex flex-col">
             <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-[#279d5e]">
               {product.category}
@@ -280,7 +301,7 @@ export default function ProductDetailsPage() {
               {product.nameNp}
             </p>
 
-          
+
             <div className="mt-5 flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-1 text-amber-500">
                 <Star size={17} fill="currentColor" />
@@ -295,7 +316,7 @@ export default function ProductDetailsPage() {
               </span>
             </div>
 
-           
+
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <span className="text-3xl font-bold text-[#101A17]">
                 Rs. {product.price}
@@ -315,7 +336,7 @@ export default function ProductDetailsPage() {
               )}
             </div>
 
-           
+
             <div className="mt-8 border-t border-gray-200 pt-7">
               <h2 className="mb-3 text-sm font-bold text-[#101A17]">
                 Product Description
@@ -326,7 +347,7 @@ export default function ProductDetailsPage() {
               </p>
             </div>
 
-         
+
             <div className="mt-7 flex items-center gap-2 text-sm font-medium text-[#279d5e]">
               <Check size={18} />
               Available for purchase
@@ -363,7 +384,7 @@ export default function ProductDetailsPage() {
               </div>
             </div>
 
-          
+
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <button
                 type="button"
@@ -384,8 +405,8 @@ export default function ProductDetailsPage() {
                 }
                 aria-pressed={isWishlisted}
                 className={`flex h-14 items-center justify-center gap-2 rounded-xl border px-6 text-sm font-semibold transition ${isWishlisted
-                    ? "border-red-200 bg-red-50 text-red-500"
-                    : "border-gray-200 bg-white text-gray-600 hover:border-red-200 hover:text-red-500"
+                  ? "border-red-200 bg-red-50 text-red-500"
+                  : "border-gray-200 bg-white text-gray-600 hover:border-red-200 hover:text-red-500"
                   }`}
               >
                 <Heart
@@ -397,7 +418,7 @@ export default function ProductDetailsPage() {
               </button>
             </div>
 
-           
+
             <div className="mt-9 grid grid-cols-1 gap-5 border-t border-gray-200 pt-7 sm:grid-cols-3">
               <div className="flex items-start gap-3">
                 <Truck className="shrink-0 text-[#279d5e]" size={21} />
@@ -448,7 +469,7 @@ export default function ProductDetailsPage() {
         </div>
       </section>
 
-    
+
       {relatedProducts.length > 0 && (
         <section className="border-t border-gray-100 bg-white">
           <div className="mx-auto max-w-7xl px-5 py-14 sm:px-8">
@@ -478,8 +499,10 @@ export default function ProductDetailsPage() {
                   href={`/products/${item.id}`}
                   className="group overflow-hidden rounded-2xl border border-gray-100 bg-white transition hover:-translate-y-1 hover:shadow-lg"
                 >
-                  <div className="aspect-square overflow-hidden bg-gray-50">
-                    <img
+                  <div className="relative aspect-square overflow-hidden bg-gray-50">
+                    <Image
+                      fill
+                      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                       src={item.image}
                       alt={item.name}
                       loading="lazy"
@@ -517,7 +540,7 @@ export default function ProductDetailsPage() {
         </section>
       )}
 
-     
+
       {message && (
         <div
           role="status"

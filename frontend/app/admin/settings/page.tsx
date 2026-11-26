@@ -159,8 +159,8 @@ function AdminSettingsForm({
             </div>
           </div>
 
-          <div className="grid gap-5 sm:grid-cols-2">
-            <FormField label="Full Name">
+          <div className="grid gap-5 sm:grid-cols-2  ">
+            <FormField label="Full Name" >
               <input
                 value={name}
                 onChange={(event) => setName(event.target.value)}

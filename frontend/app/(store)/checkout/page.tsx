@@ -4,6 +4,7 @@
 import { useState, useSyncExternalStore, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 
 import {
   ArrowLeft,
@@ -422,7 +423,7 @@ export default function CheckoutPage() {
                 {cart.map((item) => (
                   <div key={item.id} className="flex gap-3">
                     <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-gray-50">
-                      <img
+                      <Image
                         src={item.image}
                         alt={item.name}
                         className="h-full w-full object-cover"

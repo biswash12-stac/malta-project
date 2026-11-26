@@ -24,6 +24,7 @@ import {
   type AdminOrder,
   type OrderStatus,
 } from "@/lib/order-storage";
+import Image from "next/image";
 
 const statusOptions: OrderStatus[] = [
   "PENDING",
@@ -427,7 +428,9 @@ export default function AdminOrdersPage() {
                       key={`${item.productId}-${index}`}
                       className="flex items-center gap-3 rounded-xl border border-gray-100 p-3"
                     >
-                      <img
+                      <Image
+                      fill
+  sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                         src={item.image}
                         alt={item.name}
                         className="h-14 w-14 rounded-lg bg-gray-100 object-cover"

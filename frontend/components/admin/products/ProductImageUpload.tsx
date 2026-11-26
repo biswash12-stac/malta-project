@@ -3,6 +3,7 @@
 
 import { useRef, useState, type ChangeEvent } from "react";
 import { X, UploadCloud } from "lucide-react";
+import Image from "next/image";
 
 type ProductImageUploadProps = {
   value: string;
@@ -111,7 +112,9 @@ export default function ProductImageUpload({
 
       {value && (
         <div className="flex items-center gap-4 rounded-xl border border-gray-200 p-3">
-          <img
+          <Image
+          fill
+  sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
             src={value}
             alt="Product preview"
             className="h-24 w-24 rounded-lg object-cover"

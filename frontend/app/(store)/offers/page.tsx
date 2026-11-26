@@ -13,22 +13,29 @@ import {
   X,
 } from "lucide-react";
 
-import { products } from "@/data/products";
+import { useProducts } from "@/hooks/useProducts";
+import Image from "next/image";
 
 export default function OffersPage() {
+  const products = useProducts();
+
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [search, setSearch] = useState("");
 
-  
+
   const offerProducts = useMemo(
     () =>
       products.filter(
         (product) =>
+          product.isVisible !== false &&
           product.originalPrice !== undefined &&
-          product.originalPrice > product.price
+          product.originalPrice !== null &&
+          product.originalPrice > product.price &&
+          product.price > 0
       ),
-    []
+    [products]
   );
+
 
   const offerCategories = useMemo(
     () => [
@@ -46,6 +53,7 @@ export default function OffersPage() {
   const formatPrice = (price: number) =>
     `Rs. ${price.toLocaleString("en-NP")}`;
 
+
   const filteredOffers = useMemo(
     () =>
       offerProducts.filter((product) => {
@@ -53,9 +61,12 @@ export default function OffersPage() {
           selectedCategory === "All" ||
           product.category === selectedCategory;
 
+        const searchTerm = search.toLowerCase().trim();
+
         const matchesSearch =
-          product.name.toLowerCase().includes(search.toLowerCase()) ||
-          (product.nameNp ?? "").includes(search);
+          product.name.toLowerCase().includes(searchTerm) ||
+          (product.nameNp ?? "").toLowerCase().includes(searchTerm) ||
+          product.category.toLowerCase().includes(searchTerm);
 
         return matchesCategory && matchesSearch;
       }),
@@ -71,7 +82,6 @@ export default function OffersPage() {
   return (
     <main className="min-h-screen bg-[#fafafa] text-[#101A17]">
 
-     
       <section className="relative overflow-hidden bg-[#101A17] px-5 py-16 text-white sm:px-8 sm:py-20">
         <div className="pointer-events-none absolute -right-20 -top-28 h-80 w-80 rounded-full bg-[#35C477]/15 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-32 left-1/3 h-80 w-80 rounded-full bg-[#35C477]/10 blur-3xl" />
@@ -120,10 +130,8 @@ export default function OffersPage() {
         </div>
       </section>
 
-      
-      <section className="mx-auto max-w-7xl px-5 py-14 sm:px-8 lg:py-20">
 
-        
+      <section className="mx-auto max-w-7xl px-5 py-14 sm:px-8 lg:py-20">
         <div className="mb-8">
           <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-[#279d5e]">
             Limited price specials
@@ -138,6 +146,7 @@ export default function OffersPage() {
             Find your favorite products at special prices.
           </p>
         </div>
+
 
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative w-full sm:max-w-sm">
@@ -175,6 +184,7 @@ export default function OffersPage() {
           </p>
         </div>
 
+
         <div className="mb-9 flex gap-2 overflow-x-auto pb-2">
           {offerCategories.map((category) => (
             <button
@@ -182,16 +192,16 @@ export default function OffersPage() {
               type="button"
               onClick={() => setSelectedCategory(category)}
               aria-pressed={selectedCategory === category}
-              className={`shrink-0 rounded-full px-5 py-2.5 text-sm font-semibold transition ${
-                selectedCategory === category
+              className={`shrink-0 rounded-full px-5 py-2.5 text-sm font-semibold transition ${selectedCategory === category
                   ? "bg-[#101A17] text-white"
                   : "border border-gray-200 bg-white text-gray-600 hover:border-[#35C477] hover:text-[#279d5e]"
-              }`}
+                }`}
             >
               {category === "All" ? "All Offers" : category}
             </button>
           ))}
         </div>
+
 
         {filteredOffers.length > 0 ? (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
@@ -208,12 +218,22 @@ export default function OffersPage() {
                   className="group overflow-hidden rounded-2xl border border-gray-100 bg-white transition duration-300 hover:-translate-y-1 hover:shadow-lg"
                 >
                   <div className="relative aspect-square overflow-hidden bg-[#f5f5f5]">
-                    <img
-                      src={product.image}
-                      alt={product.name}
-                      loading="lazy"
-                      className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                    />
+                    {product.image ? (
+                      <Image
+                        src={product.image}
+                        alt={product.name}
+                        fill
+                        sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                        className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center">
+                        <ShoppingBag
+                          size={40}
+                          className="text-gray-300"
+                        />
+                      </div>
+                    )}
 
                     <span className="absolute left-3 top-3 flex items-center gap-1 rounded-full bg-[#E84B4B] px-3 py-1.5 text-[11px] font-bold text-white shadow-sm">
                       <Tag size={12} />
@@ -233,6 +253,7 @@ export default function OffersPage() {
                     <p className="mt-1 line-clamp-1 text-xs font-medium text-gray-500">
                       {product.nameNp ?? ""}
                     </p>
+
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <span className="text-sm font-bold text-[#279d5e] sm:text-base">
                         {formatPrice(product.price)}
@@ -276,7 +297,9 @@ export default function OffersPage() {
             </h3>
 
             <p className="mt-2 text-sm text-gray-500">
-              Try another search or category.
+              {offerProducts.length === 0
+                ? "There are currently no discounted products. Check back soon!"
+                : "Try another search or category."}
             </p>
 
             <button
@@ -291,6 +314,7 @@ export default function OffersPage() {
             </button>
           </div>
         )}
+
 
         {filteredOffers.length > 0 && (
           <div className="mt-12 flex flex-col justify-between gap-4 rounded-2xl bg-[#EAF8EF] p-6 sm:flex-row sm:items-center sm:p-8">
@@ -312,12 +336,15 @@ export default function OffersPage() {
               <p className="text-2xl font-bold text-[#279d5e]">
                 {formatPrice(totalSavings)}
               </p>
+
               <p className="mt-1 text-xs text-gray-500">
                 If you purchase one of each displayed offer
               </p>
             </div>
           </div>
         )}
+
+
         <div className="mt-12 text-center">
           <Link
             href="/products"

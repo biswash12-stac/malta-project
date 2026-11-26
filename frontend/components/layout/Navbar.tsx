@@ -24,6 +24,7 @@ import {
 } from "@/lib/shop-storage";
 
 import { products } from "@/data/products";
+import Image from "next/image";
 
 gsap.registerPlugin(useGSAP);
 
@@ -405,7 +406,9 @@ function NavbarContent() {
                             >
                               <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-gray-100">
                                 {product.image ? (
-                                  <img
+                                  <Image
+                                  fill
+  sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                                     src={product.image}
                                     alt={product.name}
                                     className="h-full w-full object-cover"
