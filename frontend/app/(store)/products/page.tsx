@@ -32,6 +32,7 @@ import {
 
 import { categories } from "@/data/products";
 import { useProducts } from "@/hooks/useProducts";
+import Image from "next/image";
 
 const ITEMS_PER_PAGE = 8;
 const DEFAULT_MAX_PRICE = 1000;
@@ -750,7 +751,9 @@ export default function ProductsPage() {
                           className="block h-full w-full"
                         >
                           {product.image ? (
-                            <img
+                            <Image
+                            fill
+  sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                               src={product.image}
                               alt={product.name}
                               loading="lazy"

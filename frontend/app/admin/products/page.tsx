@@ -24,6 +24,7 @@ import {
   subscribeToProducts,
   saveProducts,
 } from "@/lib/product-storage";
+import Image from "next/image";
 
 export default function AdminProductsPage() {
   const { user, isLoading } = useAuth();
@@ -245,7 +246,9 @@ export default function AdminProductsPage() {
                       <div className="flex items-center gap-3">
 
                         <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-gray-100">
-                          <img
+                          <Image
+                          fill
+  sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                             src={product.image}
                             alt={product.name}
                             className="h-full w-full object-cover"

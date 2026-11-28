@@ -28,6 +28,7 @@ import {
   type AdminOrder,
   type OrderStatus,
 } from "@/lib/order-storage";
+import Image from "next/image";
 
 const formatPrice = (price: number) =>
   `Rs. ${price.toLocaleString("en-NP")}`;
@@ -382,7 +383,9 @@ function OrderCard({
                 className="flex items-center gap-3"
               >
                 <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-white">
-                  <img
+                  <Image
+                  fill
+  sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                     src={item.image}
                     alt={item.name}
                     className="h-full w-full object-cover"

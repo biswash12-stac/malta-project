@@ -23,6 +23,7 @@ import {
   saveCart,
   type CartItem,
 } from "@/lib/shop-storage";
+import Image from "next/image";
 
 export default function WishlistPage() {
   const wishlist = useSyncExternalStore(
@@ -31,7 +32,7 @@ export default function WishlistPage() {
     getEmptyWishlistSnapshot
   );
 
- 
+
   const wishlistProducts = products.filter((product) =>
     wishlist.includes(product.id)
   );
@@ -44,7 +45,7 @@ export default function WishlistPage() {
     saveWishlist(updatedWishlist);
   };
 
- 
+
   const addToCart = (product: (typeof products)[number]) => {
     const cart = getCart();
 
@@ -82,7 +83,7 @@ export default function WishlistPage() {
   return (
     <main className="min-h-screen bg-[#fafafa] text-[#101A17]">
 
-      
+
       <section className="bg-[#101A17] px-5 py-14 text-white sm:px-8 sm:py-16">
         <div className="mx-auto max-w-7xl">
           <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#35C477]/15 text-[#35C477]">
@@ -122,7 +123,7 @@ export default function WishlistPage() {
         </div>
       </section>
 
-      
+
       <section className="mx-auto max-w-7xl px-5 py-12 sm:px-8 sm:py-16">
         {wishlistProducts.length > 0 ? (
           <>
@@ -155,13 +156,15 @@ export default function WishlistPage() {
                   key={product.id}
                   className="group overflow-hidden rounded-2xl border border-gray-100 bg-white transition duration-300 hover:-translate-y-1 hover:shadow-lg"
                 >
-                  
+
                   <div className="relative aspect-[4/3] overflow-hidden bg-gray-100">
                     <Link href={`/products/${product.id}`}>
-                      <img
+                      <Image
+
                         src={product.image}
                         alt={product.name}
-                        loading="lazy"
+                        fill
+                        sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                         className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                       />
                     </Link>
@@ -184,7 +187,7 @@ export default function WishlistPage() {
                     </button>
                   </div>
 
-                  
+
                   <div className="p-4">
                     <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-[#279d5e]">
                       {product.category}
@@ -200,7 +203,7 @@ export default function WishlistPage() {
                       </p>
                     </Link>
 
-                   
+
                     <div className="mt-3 flex items-center gap-1 text-xs text-gray-500">
                       <Star
                         size={14}
@@ -212,7 +215,7 @@ export default function WishlistPage() {
                       <span>({product.reviews} reviews)</span>
                     </div>
 
-                    
+
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <span className="text-lg font-bold text-[#279d5e]">
                         {formatPrice(product.price)}
@@ -226,7 +229,7 @@ export default function WishlistPage() {
                         )}
                     </div>
 
-                    
+
                     <div className="mt-5 grid grid-cols-[1fr_auto] gap-2">
                       <button
                         type="button"
@@ -254,7 +257,7 @@ export default function WishlistPage() {
             </div>
           </>
         ) : (
-         
+
           <div className="mx-auto flex max-w-xl flex-col items-center rounded-3xl border border-gray-100 bg-white px-6 py-16 text-center shadow-sm sm:py-20">
             <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-[#EAF8EF] text-[#35C477]">
               <Heart size={36} />
@@ -265,7 +268,7 @@ export default function WishlistPage() {
             </h2>
 
             <p className="mt-3 text-sm leading-7 text-gray-500">
-             {` You haven't saved any products yet. Explore
+              {` You haven't saved any products yet. Explore
               our collection and add your favorite items
               to your wishlist.`}
             </p>

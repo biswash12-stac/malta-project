@@ -3,6 +3,7 @@
 
 import { useSyncExternalStore } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   ArrowLeft,
   Minus,
@@ -26,7 +27,7 @@ import {
 } from "@/lib/shop-storage";
 
 export default function CartPage() {
- 
+
   const cart = useSyncExternalStore(
     subscribeToShopStorage,
     getCartSnapshot,
@@ -39,17 +40,17 @@ export default function CartPage() {
     0
   );
 
-  
+
   const totalItems = cart.reduce(
     (total, item) => total + item.quantity,
     0
   );
 
-  
+
   const formatPrice = (price: number) =>
     `Rs. ${price.toLocaleString("en-NP")}`;
 
-  
+
   const updateQuantity = (productId: number, change: number) => {
     const currentCart = getCart();
 
@@ -65,7 +66,7 @@ export default function CartPage() {
     saveCart(updatedCart);
   };
 
- 
+
   const removeItem = (productId: number) => {
     const updatedCart = getCart().filter(
       (item) => item.id !== productId
@@ -74,12 +75,12 @@ export default function CartPage() {
     saveCart(updatedCart);
   };
 
-  
+
   const clearCart = () => {
     saveCart([]);
   };
 
-  
+
   if (cart.length === 0) {
     return (
       <main className="flex min-h-[75vh] items-center justify-center bg-[#fafafa] px-5 py-20">
@@ -175,11 +176,19 @@ export default function CartPage() {
                   href={`/products/${item.id}`}
                   className="h-36 w-full shrink-0 overflow-hidden rounded-xl bg-gray-50 sm:h-28 sm:w-28"
                 >
-                  <img
-                    src={item.image}
-                    alt={item.name}
-                    className="h-full w-full object-cover transition duration-300 hover:scale-105"
-                  />
+                  {item.image?.trim() ? (
+                    <Image
+                      width={112}
+                      height={112}
+                      src={item.image}
+                      alt={item.name}
+                      className="h-36 w-full shrink-0 rounded-xl bg-gray-50 object-contain sm:h-28 sm:w-28"
+                    />
+                  ) : (
+                    <div className="flex h-36 w-full shrink-0 items-center justify-center rounded-xl bg-gray-50 text-xs text-gray-400 sm:h-28 sm:w-28">
+                      No image available
+                    </div>
+                  )}
                 </Link>
 
                 <div className="min-w-0 flex-1">
